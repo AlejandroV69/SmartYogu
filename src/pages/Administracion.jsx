@@ -1,54 +1,239 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
+import { useNavigate } from 'react-router-dom';
 
 export default function Administracion() {
-  const [modalOpen, setModalOpen] = useState(false);
+  const navigate = useNavigate();
+  // ── UI state ─────────────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('Dashboard');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalRecibo, setModalRecibo] = useState(null); // pedido seleccionado para ver recibo
+  const [addFlavorModalOpen, setAddFlavorModalOpen] = useState(false);
+  const [newFlavor, setNewFlavor] = useState({ sabor: '', presentacion: '', precio: '', stock: '' });
+  const [savingFlavor, setSavingFlavor] = useState(false);
+
+  // ── Datos ─────────────────────────────────────────────────────────
+  const [inventario, setInventario] = useState([]);
+  const [pedidos, setPedidos] = useState([]);
+  const [loadingInv, setLoadingInv] = useState(true);
+  const [loadingPed, setLoadingPed] = useState(true);
+  const [error, setError] = useState(null);
+
+  // ── GET: inventario ──────────────────────────────────────────────
+  useEffect(() => {
+    async function fetchInventario() {
+      setLoadingInv(true);
+      const { data, error } = await supabase
+        .from('inventario')
+        .select('*')
+        .order('sabor');
+
+      if (error) {
+        console.error('Error cargando inventario:', error.message);
+        setError('No se pudo cargar el inventario.');
+      } else {
+        setInventario(data || []);
+      }
+      setLoadingInv(false);
+    }
+    fetchInventario();
+  }, []);
+
+  // ── GET: pedidos (cola de verificación) ──────────────────────────
+  useEffect(() => {
+    async function fetchPedidos() {
+      setLoadingPed(true);
+      const { data, error } = await supabase
+        .from('pedidos')
+        .select('id, cliente_nombre, total, estado, comprobante_url, created_at')
+        .in('estado', ['Pago por Verificar', 'Pendiente por Pago'])
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error cargando pedidos:', error.message);
+      } else {
+        setPedidos(data || []);
+      }
+      setLoadingPed(false);
+    }
+    fetchPedidos();
+  }, []);
+
+  // ── UPDATE: stock de inventario (+/-) ────────────────────────────
+  const updateStock = async (producto, delta) => {
+    const nuevoStock = Math.max(0, producto.stock + delta);
+
+    // Actualización optimista en el estado local
+    setInventario((prev) =>
+      prev.map((p) => (p.id === producto.id ? { ...p, stock: nuevoStock } : p))
+    );
+
+    const { error } = await supabase
+      .from('inventario')
+      .update({ stock: nuevoStock })
+      .eq('id', producto.id);
+
+    if (error) {
+      console.error('Error actualizando stock:', error.message);
+      // Revertir el cambio local si falla
+      setInventario((prev) =>
+        prev.map((p) => (p.id === producto.id ? { ...p, stock: producto.stock } : p))
+      );
+      setError(`No se pudo actualizar el stock: ${error.message}`);
+    }
+  };
+
+  // ── UPDATE: cambiar estado de un pedido ──────────────────────────
+  const cambiarEstadoPedido = async (pedidoId, nuevoEstado) => {
+    // Actualización optimista
+    setPedidos((prev) =>
+      prev.map((p) => (p.id === pedidoId ? { ...p, estado: nuevoEstado } : p))
+    );
+
+    const { error } = await supabase
+      .from('pedidos')
+      .update({ estado: nuevoEstado })
+      .eq('id', pedidoId);
+
+    if (error) {
+      console.error('Error actualizando pedido:', error.message);
+      setError(`No se pudo actualizar el pedido: ${error.message}`);
+      // No revertimos el estado para no confundir — recarga de página lo arregla
+    } else {
+      // Quitar de la cola si fue Aprobado o Rechazado
+      if (nuevoEstado === 'Aprobado' || nuevoEstado === 'Rechazado') {
+        setTimeout(() => {
+          setPedidos((prev) => prev.filter((p) => p.id !== pedidoId));
+        }, 600);
+      }
+    }
+  };
+
+  // ── POST: añadir nuevo sabor ───────────────────────────────────────
+  const handleAddFlavor = async (e) => {
+    e.preventDefault();
+    setSavingFlavor(true);
+    
+    const { data, error } = await supabase
+      .from('inventario')
+      .insert([{
+        sabor: newFlavor.sabor,
+        presentacion: newFlavor.presentacion,
+        precio: parseFloat(newFlavor.precio),
+        stock: parseInt(newFlavor.stock, 10),
+      }])
+      .select();
+      
+    if (error) {
+      console.error('Error añadiendo sabor:', error.message);
+      setError(`No se pudo añadir el sabor: ${error.message}`);
+    } else if (data) {
+      // Actualización optimista
+      setInventario((prev) => [...prev, data[0]].sort((a, b) => a.sabor.localeCompare(b.sabor)));
+      setAddFlavorModalOpen(false);
+      setNewFlavor({ sabor: '', presentacion: '', precio: '', stock: '' });
+    }
+    setSavingFlavor(false);
+  };
+
+  // ── Helpers UI ───────────────────────────────────────────────────
+  const getStockColor = (stock) => {
+    if (stock <= 10) return 'bg-error';
+    if (stock <= 30) return 'bg-tertiary';
+    return 'bg-primary';
+  };
+
+  const getStockWidth = (stock) => {
+    const pct = Math.min((stock / 200) * 100, 100);
+    return `${pct}%`;
+  };
+
+  const formatDate = (dateStr) => {
+    return new Date(dateStr).toLocaleString('es-VE', {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  const getEstadoBadge = (estado) => {
+    if (estado === 'Aprobado') return 'bg-green-500/20 text-green-400 border-green-500/30';
+    if (estado === 'Rechazado') return 'bg-error/20 text-error border-error/30';
+    if (estado === 'Pago por Verificar') return 'bg-tertiary/20 text-tertiary border-tertiary/30';
+    return 'bg-surface-container-highest text-on-surface-variant border-outline-variant';
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/login');
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background text-on-surface">
-      {/* NavigationDrawer Overlay for Mobile */}
+      {/* Overlay móvil del sidebar */}
       {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden" 
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}
-      
+
       {/* NavigationDrawer */}
-      <aside 
-        className={`fixed left-0 top-0 h-full w-60 bg-surface-container-low border-r border-outline-variant flex flex-col z-50 transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`} 
+      <aside
+        className={`fixed left-0 top-0 h-full w-60 bg-surface-container-low border-r border-outline-variant flex flex-col z-50 transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        } md:translate-x-0`}
         style={{ padding: '24px 0' }}
       >
         <div className="px-4 mb-8">
           <h1 className="text-primary tracking-tight font-bold text-2xl">SmartYogu Admin</h1>
         </div>
         <nav className="flex-1 space-y-1 px-2">
-          <a className="flex items-center gap-4 px-4 py-2 text-primary font-bold border-r-4 border-primary bg-surface-container-high transition-colors duration-200 rounded-l-lg" href="#">
-            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>dashboard</span>
-            <span className="text-sm font-medium">Dashboard</span>
-          </a>
-          <a className="flex items-center gap-4 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all duration-200 rounded-lg" href="#">
-            <span className="material-symbols-outlined">inventory_2</span>
-            <span className="text-sm font-medium">Inventory</span>
-          </a>
-          <a className="flex items-center gap-4 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all duration-200 rounded-lg" href="#">
-            <span className="material-symbols-outlined">verified_user</span>
-            <span className="text-sm font-medium">Verification</span>
-          </a>
-          <a className="flex items-center gap-4 px-4 py-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest transition-all duration-200 rounded-lg" href="#">
-            <span className="material-symbols-outlined">settings</span>
-            <span className="text-sm font-medium">Settings</span>
-          </a>
+          {[
+            { icon: 'dashboard', label: 'Dashboard', id: 'Dashboard' },
+            { icon: 'inventory_2', label: 'Inventory', id: 'Inventory' },
+            { icon: 'verified_user', label: 'Verification', id: 'Verification' },
+            { icon: 'settings', label: 'Settings', id: 'Settings' },
+          ].map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
+                className={`w-full flex items-center gap-4 px-4 py-2 transition-all duration-200 rounded-lg ${
+                  isActive
+                    ? 'text-primary font-bold border-r-4 border-primary bg-surface-container-high rounded-l-lg'
+                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest'
+                }`}
+              >
+                <span
+                  className="material-symbols-outlined"
+                  style={isActive ? { fontVariationSettings: "'FILL' 1" } : {}}
+                >
+                  {item.icon}
+                </span>
+                <span className="text-sm font-medium">{item.label}</span>
+              </button>
+            );
+          })}
         </nav>
-        <div className="mt-auto px-4 pt-6 border-t border-outline-variant">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold">
-              AD
+        <div className="mt-auto px-4 pt-6 pb-6 border-t border-outline-variant">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold">
+                AD
+              </div>
+              <div>
+                <p className="text-sm font-medium text-on-surface">Admin</p>
+                <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">Master Access</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm font-medium text-on-surface">Admin Root</p>
-              <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">Master Access</p>
-            </div>
+            <button 
+              onClick={handleLogout}
+              className="text-error hover:bg-error-container p-2 rounded-full transition-colors flex items-center justify-center active:scale-90"
+              title="Cerrar Sesión"
+            >
+              <span className="material-symbols-outlined text-[20px]">logout</span>
+            </button>
           </div>
         </div>
       </aside>
@@ -58,7 +243,7 @@ export default function Administracion() {
         {/* TopAppBar */}
         <header className="sticky top-0 w-full z-30 bg-surface border-b border-outline-variant flex justify-between items-center px-4 md:px-8 h-16">
           <div className="flex items-center gap-2 md:gap-4">
-            <button 
+            <button
               className="text-on-surface-variant hover:bg-surface-container-highest p-2 rounded-full transition-colors md:hidden"
               onClick={() => setSidebarOpen(true)}
             >
@@ -66,10 +251,14 @@ export default function Administracion() {
             </button>
             <h2 className="font-semibold text-xl md:text-2xl text-primary">Panel de Control</h2>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 md:gap-6">
             <div className="hidden md:flex items-center bg-surface-container px-4 py-1 rounded-full border border-outline-variant">
               <span className="material-symbols-outlined text-on-surface-variant text-sm mr-1">search</span>
-              <input className="bg-transparent border-none focus:outline-none text-sm text-on-surface w-48" placeholder="Buscar pedido o sabor..." type="text" />
+              <input
+                className="bg-transparent border-none focus:outline-none text-sm text-on-surface w-48"
+                placeholder="Buscar pedido o sabor..."
+                type="text"
+              />
             </div>
             <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
               <span className="material-symbols-outlined text-primary text-xl">account_circle</span>
@@ -77,144 +266,237 @@ export default function Administracion() {
           </div>
         </header>
 
-        <div className="p-8 space-y-8 max-w-[1440px] mx-auto">
-          {/* Hero Stats */}
-          <section className="relative h-48 rounded-xl overflow-hidden bg-surface-container-low border border-outline-variant">
+        <div className="p-4 md:p-8 space-y-8 max-w-[1440px] mx-auto">
+          {/* Error global */}
+          {error && (
+            <div className="p-4 bg-error-container/30 border border-error/40 rounded-xl flex items-center gap-3">
+              <span className="material-symbols-outlined text-error">error</span>
+              <p className="text-sm text-error flex-1">{error}</p>
+              <button onClick={() => setError(null)} className="text-error hover:scale-110 transition-transform">
+                <span className="material-symbols-outlined text-[18px]">close</span>
+              </button>
+            </div>
+          )}
+
+          {/* Hero */}
+          <section className="relative h-40 md:h-48 rounded-xl overflow-hidden bg-surface-container-low border border-outline-variant">
             <div className="absolute inset-0 bg-gradient-to-r from-surface-container-low via-transparent to-transparent"></div>
             <div className="relative z-10 p-6 flex flex-col justify-end h-full">
               <p className="text-primary font-bold text-xs uppercase tracking-tighter mb-1">Resumen Operativo</p>
-              <h1 className="font-extrabold text-5xl text-on-surface leading-none">Freshness Dashboard</h1>
+              <h1 className="font-extrabold text-3xl md:text-5xl text-on-surface leading-none">
+                Freshness Dashboard
+              </h1>
             </div>
           </section>
 
-          {/* Section 1: Inventory */}
-          <section id="inventory">
-            <div className="flex justify-between items-end mb-6">
+          {/* ── Sección 1: Inventario ─────────────────────────────── */}
+          {(activeTab === 'Dashboard' || activeTab === 'Inventory') && (
+            <section id="inventory">
+              <div className="flex justify-between items-end mb-6">
               <div>
-                <h3 className="font-semibold text-2xl text-on-surface">Inventario de Sabores</h3>
+                <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Inventario de Sabores</h3>
                 <p className="text-on-surface-variant text-sm font-medium">Gestión de stock en tiempo real</p>
               </div>
-              <button className="bg-primary text-on-primary px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110">
+              <button 
+                className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
+                onClick={() => setAddFlavorModalOpen(true)}
+              >
                 <span className="material-symbols-outlined">add</span>
-                Añadir Sabor
+                <span className="hidden md:inline">Añadir Sabor</span>
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {[
-                { name: 'Arándanos Silvestres', tag: 'Premium', tagClass: 'bg-primary/10 text-primary border-primary/20', icon: 'icecream', stock: 124, size: '500ml / 1L', level: '75%', levelColor: 'bg-primary' },
-                { name: 'Mango Tropical', tag: 'Trending', tagClass: 'bg-tertiary/10 text-tertiary border-tertiary/20', icon: 'nutrition', stock: 42, size: '350ml / 500ml', level: '20%', levelColor: 'bg-error' },
-                { name: 'Natural Stevia', tag: 'Essential', tagClass: 'bg-on-surface-variant/10 text-on-surface-variant border-outline-variant', icon: 'eco', stock: 89, size: '500ml / 1.5L', level: '55%', levelColor: 'bg-primary' },
-                { name: 'Coco Cremoso', tag: 'Vegan', tagClass: 'bg-primary/10 text-primary border-primary/20', icon: 'spa', stock: 210, size: '500ml', level: '90%', levelColor: 'bg-primary' },
-              ].map((item) => (
-                <div key={item.name} className="bento-card bg-surface-container border border-outline-variant rounded-xl p-4 flex flex-col justify-between">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h4 className="font-semibold text-lg text-primary">{item.name}</h4>
-                      <span className={`inline-flex items-center px-2 py-[2px] text-[10px] rounded-full border uppercase font-bold tracking-widest ${item.tagClass}`}>{item.tag}</span>
-                    </div>
-                    <div className="bg-surface-container-highest p-1 rounded-lg">
-                      <span className="material-symbols-outlined text-on-surface-variant">{item.icon}</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 my-8">
-                    <div className="flex-1">
-                      <p className="text-[10px] text-on-surface-variant uppercase font-bold">Stock Disponible</p>
-                      <div className="text-[56px] font-extrabold text-on-surface leading-none tabular-nums tracking-tighter">{item.stock}</div>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <button className="w-10 h-10 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-primary hover:text-on-primary transition-all active:scale-90 border border-outline-variant">
-                        <span className="material-symbols-outlined">add</span>
-                      </button>
-                      <button className="w-10 h-10 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-primary hover:text-on-primary transition-all active:scale-90 border border-outline-variant">
-                        <span className="material-symbols-outlined">remove</span>
-                      </button>
-                    </div>
-                  </div>
-                  <div className="pt-4 border-t border-outline-variant flex justify-between items-center">
-                    <span className="text-xs text-on-surface-variant">Tamaño: <span className="text-on-surface">{item.size}</span></span>
-                    <div className="w-24 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                      <div className={`h-full ${item.levelColor}`} style={{ width: item.level }}></div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
 
-          {/* Section 2: Verification Queue */}
-          <section id="verification">
-            <div className="mb-6">
-              <h3 className="font-semibold text-2xl text-on-surface">Cola de Verificación</h3>
-              <p className="text-on-surface-variant text-sm font-medium">Validación manual de pagos y comprobantes bancarios</p>
-            </div>
-            <div className="bg-surface-container border border-outline-variant rounded-xl overflow-hidden overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[800px]">
-                <thead>
-                  <tr className="bg-surface-container-high border-b border-outline-variant">
-                    <th className="px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Cliente</th>
-                    <th className="px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Monto</th>
-                    <th className="px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">Fecha / Hora</th>
-                    <th className="px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-center">Comprobante</th>
-                    <th className="px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant">
-                  {[
-                    { initials: 'RM', name: 'Ricardo Martínez', id: 'ORD-9821', amount: '$45.50', time: 'Hoy, 14:32' },
-                    { initials: 'LC', name: 'Laura Castro', id: 'ORD-9820', amount: '$120.00', time: 'Hoy, 13:15' },
-                    { initials: 'SP', name: 'Samuel Peña', id: 'ORD-9819', amount: '$24.99', time: 'Hoy, 12:45' },
-                  ].map((row) => (
-                    <tr key={row.id} className="hover:bg-surface-container-highest transition-colors group">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-4">
-                          <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">{row.initials}</div>
-                          <div>
-                            <p className="text-sm font-medium text-on-surface">{row.name}</p>
-                            <p className="text-xs text-on-surface-variant">ID: #{row.id}</p>
-                          </div>
+            {loadingInv ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {[1, 2, 3, 4].map((n) => (
+                  <div key={n} className="h-48 bg-surface-container rounded-xl animate-pulse border border-outline-variant" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {inventario.map((item) => (
+                  <div
+                    key={item.id}
+                    className="bento-card bg-surface-container border border-outline-variant rounded-xl p-4 flex flex-col justify-between"
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h4 className="font-semibold text-lg text-primary">{item.sabor}</h4>
+                        <span className="text-xs text-on-surface-variant">{item.presentacion}</span>
+                      </div>
+                      <div className="bg-surface-container-highest p-1 rounded-lg">
+                        <span className="material-symbols-outlined text-on-surface-variant">icecream</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 my-4">
+                      <div className="flex-1">
+                        <p className="text-[10px] text-on-surface-variant uppercase font-bold">Stock</p>
+                        <div className="text-5xl font-extrabold text-on-surface leading-none tabular-nums tracking-tighter">
+                          {item.stock}
                         </div>
-                      </td>
-                      <td className="px-6 py-4 text-sm font-medium text-primary">{row.amount}</td>
-                      <td className="px-6 py-4 text-sm font-medium text-on-surface-variant">{row.time}</td>
-                      <td className="px-6 py-4 text-center">
+                        <p className="text-xs text-on-surface-variant mt-1">${Number(item.precio).toFixed(2)}</p>
+                      </div>
+                      <div className="flex flex-col gap-1">
                         <button
-                          className="inline-flex items-center gap-1 px-2 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all"
-                          onClick={() => setModalOpen(true)}
+                          className="w-10 h-10 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-primary hover:text-on-primary transition-all active:scale-90 border border-outline-variant"
+                          onClick={() => updateStock(item, 1)}
                         >
-                          <span className="material-symbols-outlined text-sm">visibility</span>
-                          Ver PDF
+                          <span className="material-symbols-outlined">add</span>
                         </button>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button className="px-4 py-2 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-medium hover:bg-green-500 hover:text-white transition-all">Aprobar</button>
-                          <button className="px-4 py-2 bg-error/20 text-error border border-error/30 rounded-lg text-xs font-medium hover:bg-error hover:text-on-error transition-all">Rechazar</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        <button
+                          className="w-10 h-10 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-error hover:text-on-error transition-all active:scale-90 border border-outline-variant disabled:opacity-40"
+                          onClick={() => updateStock(item, -1)}
+                          disabled={item.stock === 0}
+                        >
+                          <span className="material-symbols-outlined">remove</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-outline-variant flex justify-between items-center gap-3">
+                      <div className="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                        <div
+                          className={`h-full transition-all duration-500 ${getStockColor(item.stock)}`}
+                          style={{ width: getStockWidth(item.stock) }}
+                        />
+                      </div>
+                      <span className={`text-[10px] font-bold ${
+                        item.stock <= 10 ? 'text-error' : item.stock <= 30 ? 'text-tertiary' : 'text-primary'
+                      }`}>
+                        {item.stock <= 10 ? 'BAJO' : item.stock <= 30 ? 'MEDIO' : 'OK'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                </div>
+            )}
           </section>
+          )}
+
+          {/* ── Sección 2: Cola de Verificación ─────────────────────── */}
+          {(activeTab === 'Dashboard' || activeTab === 'Verification') && (
+            <section id="verification">
+              <div className="mb-6">
+              <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Cola de Verificación</h3>
+              <p className="text-on-surface-variant text-sm font-medium">
+                Validación manual de pagos y comprobantes bancarios
+              </p>
+            </div>
+
+            {loadingPed ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="h-16 bg-surface-container rounded-xl animate-pulse border border-outline-variant" />
+                ))}
+              </div>
+            ) : pedidos.length === 0 ? (
+              <div className="text-center py-12 bg-surface-container rounded-xl border border-outline-variant">
+                <span className="material-symbols-outlined text-5xl text-on-surface-variant block mb-3">inbox</span>
+                <p className="text-on-surface-variant text-sm">No hay pagos pendientes de verificación.</p>
+              </div>
+            ) : (
+              <div className="bg-surface-container border border-outline-variant rounded-xl overflow-hidden overflow-x-auto">
+                <table className="w-full text-left border-collapse min-w-[700px]">
+                  <thead>
+                    <tr className="bg-surface-container-high border-b border-outline-variant">
+                      {['Cliente', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
+                        <th key={h} className="px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant">
+                    {pedidos.map((pedido) => (
+                      <tr
+                        key={pedido.id}
+                        className="hover:bg-surface-container-highest transition-colors group"
+                      >
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
+                              {pedido.cliente_nombre?.slice(0, 2).toUpperCase() || '??'}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-on-surface">{pedido.cliente_nombre}</p>
+                              <p className="text-xs text-on-surface-variant">
+                                #{pedido.id.toString().slice(-8)}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm font-medium text-primary">
+                          ${Number(pedido.total).toFixed(2)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-on-surface-variant">
+                          {formatDate(pedido.created_at)}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getEstadoBadge(pedido.estado)}`}>
+                            {pedido.estado}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          {pedido.comprobante_url ? (
+                            <button
+                              className="inline-flex items-center gap-1 px-3 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all"
+                              onClick={() => { setModalRecibo(pedido); setModalOpen(true); }}
+                            >
+                              <span className="material-symbols-outlined text-sm">visibility</span>
+                              Ver
+                            </button>
+                          ) : (
+                            <span className="text-xs text-on-surface-variant italic">Sin archivo</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex justify-end gap-2">
+                            {pedido.estado !== 'Aprobado' && (
+                              <button
+                                className="px-3 py-1.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-medium hover:bg-green-500 hover:text-white transition-all active:scale-95"
+                                onClick={() => cambiarEstadoPedido(pedido.id, 'Aprobado')}
+                              >
+                                Aprobar
+                              </button>
+                            )}
+                            {pedido.estado !== 'Rechazado' && (
+                              <button
+                                className="px-3 py-1.5 bg-error/20 text-error border border-error/30 rounded-lg text-xs font-medium hover:bg-error hover:text-on-error transition-all active:scale-95"
+                                onClick={() => cambiarEstadoPedido(pedido.id, 'Rechazado')}
+                              >
+                                Rechazar
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+          )}
         </div>
 
         {/* Footer */}
         <footer className="px-8 py-6 text-on-surface-variant flex justify-between items-center bg-surface-container-lowest">
-          <p className="text-xs">© 2024 SmartYogu Ecosystem. Todos los derechos reservados.</p>
+          <p className="text-xs">© 2024 SmartYogu Ecosystem.</p>
           <div className="flex gap-4">
             <span className="flex items-center gap-1 text-[10px] uppercase font-bold tracking-widest">
-              <span className="w-2 h-2 rounded-full bg-green-500"></span> System Online
+              <span className="w-2 h-2 rounded-full bg-green-500"></span>
+              System Online
             </span>
             <span className="text-xs">v2.4.0-Fresh</span>
           </div>
         </footer>
       </main>
 
-      {/* Modal */}
-      {modalOpen && (
+      {/* Modal: Vista de comprobante */}
+      {modalOpen && modalRecibo && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4"
           onClick={() => setModalOpen(false)}
         >
           <div
@@ -222,20 +504,147 @@ export default function Administracion() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 border-b border-outline-variant flex justify-between items-center">
-              <h3 className="font-semibold text-xl text-on-surface">Comprobante de Pago</h3>
-              <button className="text-on-surface-variant hover:text-primary transition-colors" onClick={() => setModalOpen(false)}>
+              <div>
+                <h3 className="font-semibold text-xl text-on-surface">Comprobante de Pago</h3>
+                <p className="text-xs text-on-surface-variant mt-1">{modalRecibo.cliente_nombre}</p>
+              </div>
+              <button
+                className="text-on-surface-variant hover:text-primary transition-colors"
+                onClick={() => setModalOpen(false)}
+              >
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
             <div className="p-6 bg-surface-container-lowest">
-              <div className="w-full aspect-[3/4] bg-surface-container-highest rounded-lg flex items-center justify-center overflow-hidden border border-outline-variant">
-                <span className="material-symbols-outlined text-on-surface-variant text-6xl">receipt_long</span>
+              {modalRecibo.comprobante_url ? (
+                <img
+                  src={modalRecibo.comprobante_url}
+                  alt="Comprobante de pago"
+                  className="w-full max-h-[60vh] object-contain rounded-lg border border-outline-variant"
+                />
+              ) : (
+                <div className="w-full aspect-[3/4] bg-surface-container-highest rounded-lg flex items-center justify-center border border-outline-variant">
+                  <span className="material-symbols-outlined text-on-surface-variant text-6xl">receipt_long</span>
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t border-outline-variant flex justify-between items-center gap-4">
+              <div>
+                <p className="text-sm text-on-surface font-medium">${Number(modalRecibo.total).toFixed(2)}</p>
+                <p className="text-xs text-on-surface-variant">{formatDate(modalRecibo.created_at)}</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  className="px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface border border-outline-variant rounded-lg transition-all"
+                  onClick={() => setModalOpen(false)}
+                >
+                  Cerrar
+                </button>
+                <button
+                  className="px-6 py-2 bg-primary text-on-primary rounded-lg text-sm font-medium active:scale-95 transition-all"
+                  onClick={() => {
+                    cambiarEstadoPedido(modalRecibo.id, 'Aprobado');
+                    setModalOpen(false);
+                  }}
+                >
+                  Validar Ahora
+                </button>
               </div>
             </div>
-            <div className="p-6 border-t border-outline-variant flex justify-end gap-4">
-              <button className="px-6 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface" onClick={() => setModalOpen(false)}>Cerrar</button>
-              <button className="px-8 py-2 bg-primary text-on-primary rounded-lg text-sm font-medium active:scale-95 transition-all">Validar Ahora</button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Añadir Sabor */}
+      {addFlavorModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4"
+          onClick={() => setAddFlavorModalOpen(false)}
+        >
+          <div
+            className="bg-surface-container border border-outline-variant rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-outline-variant flex justify-between items-center">
+              <h3 className="font-semibold text-xl text-on-surface">Añadir Nuevo Sabor</h3>
+              <button
+                className="text-on-surface-variant hover:text-primary transition-colors"
+                onClick={() => setAddFlavorModalOpen(false)}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
             </div>
+            <form onSubmit={handleAddFlavor} className="p-6 space-y-4">
+              <div>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Nombre del Sabor</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="Ej. Fresa"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                  value={newFlavor.sabor}
+                  onChange={(e) => setNewFlavor({...newFlavor, sabor: e.target.value})}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Presentación</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="Ej. Pequeño"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                  value={newFlavor.presentacion}
+                  onChange={(e) => setNewFlavor({...newFlavor, presentacion: e.target.value})}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-on-surface-variant block mb-1">Precio ($)</label>
+                  <input
+                    required
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="2.50"
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                    value={newFlavor.precio}
+                    onChange={(e) => setNewFlavor({...newFlavor, precio: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-on-surface-variant block mb-1">Stock Inicial</label>
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    placeholder="100"
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                    value={newFlavor.stock}
+                    onChange={(e) => setNewFlavor({...newFlavor, stock: e.target.value})}
+                  />
+                </div>
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button
+                  type="button"
+                  className="flex-1 py-3 text-sm font-medium text-on-surface-variant border border-outline-variant rounded-lg hover:text-on-surface hover:bg-surface-container-highest transition-all"
+                  onClick={() => setAddFlavorModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingFlavor}
+                  className="flex-1 py-3 bg-primary text-on-primary rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+                >
+                  {savingFlavor ? (
+                    <><span className="material-symbols-outlined animate-spin">sync</span> Guardando...</>
+                  ) : (
+                    'Guardar Sabor'
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
