@@ -4,7 +4,8 @@ import { supabase } from '../supabaseClient';
 const BUCKET_NAME = 'comprobantes';
 
 export default function ReportarPago() {
-  // ── Estado UI ────────────────────────────────────────────────────
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // ── Estado General ────────────────────────────────────────────────────
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [copied, setCopied] = useState('');
   const [file, setFile] = useState(null);
@@ -125,13 +126,57 @@ export default function ReportarPago() {
       {/* TopAppBar */}
       <header className="fixed top-0 w-full z-50 bg-surface flex justify-between items-center px-4 h-16 border-b border-outline-variant">
         <div className="flex items-center gap-4">
-          <span className="material-symbols-outlined text-primary">menu</span>
-          <h1 className="font-bold text-xl text-primary tracking-tight">SmartYogu</h1>
+          <button 
+            onClick={() => setSidebarOpen(true)}
+            className="material-symbols-outlined text-primary hover:bg-surface-container-highest transition-colors p-2 rounded-full active:scale-95 duration-150"
+          >
+            menu
+          </button>
+          <div className="flex items-center gap-2">
+            <img src="/favicon.png" alt="THÖRGURT Logo" className="w-8 h-8 object-contain drop-shadow-md" />
+            <h1 className="font-bold text-xl text-primary tracking-tight">THÖRGURT</h1>
+          </div>
         </div>
         <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant">
           <span className="material-symbols-outlined text-primary">account_circle</span>
         </div>
       </header>
+
+      {/* Sidebar Overlay */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-[60] backdrop-blur-sm transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Drawer */}
+      <aside className={`fixed top-0 left-0 h-full w-72 bg-surface border-r border-outline-variant z-[70] transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+          <div className="flex items-center gap-3">
+            <img src="/favicon.png" alt="THÖRGURT Logo" className="w-8 h-8 object-contain" />
+            <h2 className="font-bold text-xl text-primary tracking-tight">Menú</h2>
+          </div>
+          <button onClick={() => setSidebarOpen(false)} className="text-on-surface-variant hover:text-error transition-colors">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <nav className="p-4 flex flex-col gap-2">
+          <a href="/" className="flex items-center gap-3 p-4 rounded-xl text-on-surface-variant hover:bg-surface-container-highest transition-colors font-medium">
+            <span className="material-symbols-outlined">icecream</span>
+            Realizar Pedido
+          </a>
+          <a href="/pago" className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 text-primary font-bold border border-primary/20">
+            <span className="material-symbols-outlined">receipt_long</span>
+            Reportar Pago
+          </a>
+          <div className="my-4 border-t border-outline-variant"></div>
+          <a href="/login" className="flex items-center gap-3 p-4 rounded-xl text-on-surface-variant hover:bg-surface-container-highest transition-colors font-medium">
+            <span className="material-symbols-outlined">admin_panel_settings</span>
+            Acceso Privado
+          </a>
+        </nav>
+      </aside>
 
       <main className="pt-20 pb-24 px-5 max-w-lg mx-auto">
         {/* Header */}
@@ -203,8 +248,8 @@ export default function ReportarPago() {
                 <div
                   key={order.id}
                   className={`cursor-pointer p-4 rounded-xl border transition-all flex flex-col gap-2 ${selectedOrder?.id === order.id
-                      ? 'border-primary bg-primary/10'
-                      : 'border-outline-variant bg-surface-container-low hover:bg-surface-container'
+                    ? 'border-primary bg-primary/10'
+                    : 'border-outline-variant bg-surface-container-low hover:bg-surface-container'
                     }`}
                   onClick={() => { setSelectedOrder(order); setError(null); }}
                 >
@@ -325,10 +370,10 @@ export default function ReportarPago() {
               {/* Submit Button */}
               <button
                 className={`w-full h-14 font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-150 ${file && !submitting
-                    ? 'bg-primary text-on-primary active:scale-95 cursor-pointer'
-                    : submitting
-                      ? 'bg-primary/70 text-on-primary cursor-not-allowed'
-                      : 'bg-primary/30 text-on-surface/30 cursor-not-allowed'
+                  ? 'bg-primary text-on-primary active:scale-95 cursor-pointer'
+                  : submitting
+                    ? 'bg-primary/70 text-on-primary cursor-not-allowed'
+                    : 'bg-primary/30 text-on-surface/30 cursor-not-allowed'
                   }`}
                 disabled={!file || submitting}
                 onClick={handleSubmit}

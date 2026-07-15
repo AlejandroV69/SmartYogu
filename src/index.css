@@ -1,30 +1,30 @@
 @import "tailwindcss";
 
 @theme {
-  /* SmartYogu Color System */
-  --color-primary: #4cd7f6;
+  /* THÖRGURT Color System (Royal Blue & Bright Blue) */
+  --color-primary: #0ca1f2;
   --color-secondary: #c0c1ff;
   --color-tertiary: #ffb873;
 
-  --color-surface: #0b1326;
-  --color-surface-dim: #0b1326;
-  --color-surface-bright: #31394d;
-  --color-surface-container-lowest: #060e20;
-  --color-surface-container-low: #131b2e;
-  --color-surface-container: #171f33;
-  --color-surface-container-high: #222a3d;
-  --color-surface-container-highest: #2d3449;
+  --color-surface: #022b60;
+  --color-surface-dim: #02224d;
+  --color-surface-bright: #044290;
+  --color-surface-container-lowest: #011634;
+  --color-surface-container-low: #04387d;
+  --color-surface-container: #07479b;
+  --color-surface-container-high: #0b59be;
+  --color-surface-container-highest: #146ad3;
 
-  --color-on-surface: #dae2fd;
-  --color-on-surface-variant: #bcc9cd;
-  --color-outline: #869397;
-  --color-outline-variant: #3d494c;
+  --color-on-surface: #ffffff;
+  --color-on-surface-variant: #b3d1f3;
+  --color-outline: #6fa0db;
+  --color-outline-variant: #265593;
 
-  --color-on-primary: #003640;
-  --color-primary-container: #06b6d4;
-  --color-on-primary-container: #00424f;
-  --color-primary-fixed: #acedff;
-  --color-on-primary-fixed: #001f26;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #0672b1;
+  --color-on-primary-container: #d8efff;
+  --color-primary-fixed: #83cfff;
+  --color-on-primary-fixed: #002c49;
 
   --color-secondary-container: #3131c0;
   --color-on-secondary-container: #b0b2ff;
@@ -39,12 +39,12 @@
   --color-error-container: #93000a;
   --color-on-error-container: #ffdad6;
 
-  --color-background: #0b1326;
-  --color-on-background: #dae2fd;
-  --color-surface-variant: #2d3449;
-  --color-inverse-surface: #dae2fd;
-  --color-inverse-on-surface: #283044;
-  --color-surface-tint: #4cd7f6;
+  --color-background: #022b60;
+  --color-on-background: #ffffff;
+  --color-surface-variant: #146ad3;
+  --color-inverse-surface: #ffffff;
+  --color-inverse-on-surface: #022b60;
+  --color-surface-tint: #0ca1f2;
 }
 
 * {
@@ -56,8 +56,8 @@ html, body, #root {
   padding: 0;
   min-height: 100vh;
   width: 100%;
-  background-color: #0b1326;
-  color: #dae2fd;
+  background-color: #022b60;
+  color: #ffffff;
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }

@@ -69,10 +69,11 @@ export default function Administracion() {
       prev.map((p) => (p.id === producto.id ? { ...p, stock: nuevoStock } : p))
     );
 
-    const { error } = await supabase
+    const { data, error, status, statusText } = await supabase
       .from('inventario')
       .update({ stock: nuevoStock })
-      .eq('id', producto.id);
+      .eq('id', producto.id)
+      .select();
 
     if (error) {
       console.error('Error actualizando stock:', error.message);
@@ -80,7 +81,14 @@ export default function Administracion() {
       setInventario((prev) =>
         prev.map((p) => (p.id === producto.id ? { ...p, stock: producto.stock } : p))
       );
-      setError(`No se pudo actualizar el stock: ${error.message}`);
+      setError(`Error ${status || 'Desconocido'} al actualizar stock: ${error.message}`);
+    } else {
+      if (!data || data.length === 0) {
+        setInventario((prev) =>
+          prev.map((p) => (p.id === producto.id ? { ...p, stock: producto.stock } : p))
+        );
+        setError('El servidor no actualizó el registro. Probable causa: RLS de Supabase está activo y bloqueando escrituras.');
+      }
     }
   };
 
@@ -184,8 +192,9 @@ export default function Administracion() {
         } md:translate-x-0`}
         style={{ padding: '24px 0' }}
       >
-        <div className="px-4 mb-8">
-          <h1 className="text-primary tracking-tight font-bold text-2xl">SmartYogu Admin</h1>
+        <div className="px-4 mb-8 flex items-center gap-3">
+          <img src="/favicon.png" alt="THÖRGURT Logo" className="w-10 h-10 object-contain drop-shadow-md" />
+          <h1 className="text-primary tracking-tight font-bold text-2xl">THÖRGURT Admin</h1>
         </div>
         <nav className="flex-1 space-y-1 px-2">
           {[
@@ -482,7 +491,7 @@ export default function Administracion() {
 
         {/* Footer */}
         <footer className="px-8 py-6 text-on-surface-variant flex justify-between items-center bg-surface-container-lowest">
-          <p className="text-xs">© 2024 SmartYogu Ecosystem.</p>
+          <p className="text-xs">© 2024 THÖRGURT.</p>
           <div className="flex gap-4">
             <span className="flex items-center gap-1 text-[10px] uppercase font-bold tracking-widest">
               <span className="w-2 h-2 rounded-full bg-green-500"></span>

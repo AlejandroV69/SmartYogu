@@ -59,14 +59,6 @@ function App() {
           }
         />
       </Routes>
-
-      {/* Dev Navigation to switch screens easily */}
-      <div className="fixed bottom-2 right-2 bg-surface-container-highest p-2 rounded-lg border border-outline-variant opacity-50 hover:opacity-100 transition-opacity z-[1000] text-xs flex gap-2 shadow-xl">
-        <Link to="/" className={location.pathname === '/' ? 'text-primary font-bold' : 'text-on-surface'}>Pedido</Link>
-        <Link to="/pago" className={location.pathname === '/pago' ? 'text-primary font-bold' : 'text-on-surface'}>Pago</Link>
-        <Link to="/login" className={location.pathname === '/login' ? 'text-primary font-bold' : 'text-on-surface'}>Login</Link>
-
-      </div>
     </>
   );
 }
