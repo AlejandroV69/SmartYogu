@@ -14,7 +14,9 @@ export default function ReportarPago() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
 
-  // ── Datos de pedidos ─────────────────────────────────────────────
+  const [bcvRate, setBcvRate] = useState(null);
+  
+  // ── Funciones de Utilidad ─────────────────────────────────────────────
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -38,6 +40,22 @@ export default function ReportarPago() {
       setLoading(false);
     }
     fetchPedidos();
+  }, []);
+
+  // ── GET: Tasa BCV ────────────────────────────────────────────────
+  useEffect(() => {
+    async function fetchBCV() {
+      try {
+        const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
+        const data = await res.json();
+        if (data && data.promedio) {
+          setBcvRate(data.promedio);
+        }
+      } catch (err) {
+        console.error('Error obteniendo tasa BCV:', err);
+      }
+    }
+    fetchBCV();
   }, []);
 
   // ── Helpers ──────────────────────────────────────────────────────
@@ -180,11 +198,19 @@ export default function ReportarPago() {
 
       <main className="pt-20 pb-24 px-5 max-w-lg mx-auto">
         {/* Header */}
-        <div className="mb-6">
-          <h2 className="font-bold text-2xl text-on-surface mb-1">Pagos Pendientes</h2>
-          <p className="text-on-surface-variant text-sm font-medium">
-            Gestiona tus facturas y confirma tus transferencias.
-          </p>
+        <div className="mb-6 flex justify-between items-end">
+          <div>
+            <h2 className="font-bold text-2xl text-on-surface mb-1">Pagos Pendientes</h2>
+            <p className="text-on-surface-variant text-sm font-medium">
+              Gestiona tus facturas y confirma tus transferencias.
+            </p>
+          </div>
+          {bcvRate && (
+            <div className="text-right">
+              <span className="text-[10px] uppercase font-bold text-tertiary tracking-widest block">Tasa BCV</span>
+              <span className="text-sm font-bold text-on-surface">{bcvRate.toFixed(2)} Bs</span>
+            </div>
+          )}
         </div>
 
         {/* Buscador de pedidos */}
@@ -258,10 +284,17 @@ export default function ReportarPago() {
                       <span className="text-primary text-xs font-bold uppercase tracking-widest">
                         PEDIDO #{order.id.toString().slice(-6).toUpperCase()}
                       </span>
-                      <h3 className="font-semibold text-2xl text-on-surface mt-1">
+                      <h3 className="font-semibold text-2xl text-on-surface mt-1 leading-none">
                         ${Number(order.total).toFixed(2)}
                       </h3>
-                      <p className="text-xs text-on-surface-variant mt-0.5">{order.cliente_nombre}</p>
+                      {bcvRate && (
+                        <p className="text-sm font-medium text-on-surface-variant mt-0.5">
+                          ~ {(Number(order.total) * bcvRate).toFixed(2)} Bs
+                        </p>
+                      )}
+                      <p className="text-xs text-on-surface-variant mt-1 font-medium bg-surface-container w-fit px-2 py-0.5 rounded">
+                        {order.cliente_nombre}
+                      </p>
                     </div>
                     <span className="px-2 py-1 rounded bg-error-container text-error text-[10px] font-bold uppercase tracking-tighter">
                       PENDIENTE
@@ -321,9 +354,16 @@ export default function ReportarPago() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-on-surface-variant text-sm font-medium">Monto exacto</span>
-                  <span className="text-primary font-bold text-lg">
-                    ${Number(selectedOrder.total).toFixed(2)}
-                  </span>
+                  <div className="text-right leading-tight">
+                    <span className="text-primary font-bold text-lg block">
+                      ${Number(selectedOrder.total).toFixed(2)}
+                    </span>
+                    {bcvRate && (
+                      <span className="text-on-surface-variant font-medium text-sm">
+                        ~ {(Number(selectedOrder.total) * bcvRate).toFixed(2)} Bs
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

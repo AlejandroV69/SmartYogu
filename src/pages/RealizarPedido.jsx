@@ -35,6 +35,9 @@ export default function RealizarPedido() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
+  
+  // BCV Rate
+  const [bcvRate, setBcvRate] = useState(null);
 
   // ── Datos del inventario ─────────────────────────────────────────
   const [inventario, setInventario] = useState([]);
@@ -69,6 +72,22 @@ export default function RealizarPedido() {
       setLoading(false);
     }
     fetchInventario();
+  }, []);
+
+  // ── GET: Tasa BCV ────────────────────────────────────────────────
+  useEffect(() => {
+    async function fetchBCV() {
+      try {
+        const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
+        const data = await res.json();
+        if (data && data.promedio) {
+          setBcvRate(data.promedio);
+        }
+      } catch (err) {
+        console.error('Error obteniendo tasa BCV:', err);
+      }
+    }
+    fetchBCV();
   }, []);
 
   // ── Lógica del Carrito ───────────────────────────────────────────
@@ -257,6 +276,14 @@ export default function RealizarPedido() {
               <p className="text-on-surface-variant text-sm max-w-[280px] mx-auto leading-relaxed">
                 Selecciona tus sabores favoritos, elige el tamaño perfecto y disfruta de una experiencia refrescante.
               </p>
+              {bcvRate && (
+                <div className="mt-4 inline-flex items-center gap-2 bg-surface/50 border border-outline-variant/30 px-3 py-1.5 rounded-lg backdrop-blur-sm">
+                  <span className="material-symbols-outlined text-[16px] text-tertiary">payments</span>
+                  <span className="text-[11px] font-medium text-on-surface-variant">
+                    Tasa BCV hoy: <strong className="text-on-surface">{bcvRate.toFixed(2)} Bs</strong>
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -434,9 +461,16 @@ export default function RealizarPedido() {
 
             <div className="p-4 bg-surface-container-high flex justify-between items-center border-t border-outline-variant">
               <span className="text-on-surface-variant font-medium">Total a pagar:</span>
-              <span className="text-2xl font-extrabold text-primary">
-                ${cartTotal.toFixed(2)}
-              </span>
+              <div className="text-right">
+                <div className="text-2xl font-extrabold text-primary leading-none">
+                  ${cartTotal.toFixed(2)}
+                </div>
+                {bcvRate && (
+                  <div className="text-sm font-medium text-on-surface-variant mt-1">
+                    ~ {(cartTotal * bcvRate).toFixed(2)} Bs
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -468,10 +502,17 @@ export default function RealizarPedido() {
             </>
           )}
           {!submitting && !done && (
-            <>
-              Confirmar Pedido (${cartTotal.toFixed(2)})
-              <span className="material-symbols-outlined">send</span>
-            </>
+            <div className="flex flex-col items-center">
+              <div className="flex items-center gap-2">
+                Confirmar Pedido (${cartTotal.toFixed(2)})
+                <span className="material-symbols-outlined text-xl">send</span>
+              </div>
+              {bcvRate && (
+                <span className="text-[10px] font-normal opacity-80 uppercase tracking-widest mt-0.5">
+                  {(cartTotal * bcvRate).toFixed(2)} Bs
+                </span>
+              )}
+            </div>
           )}
         </button>
       </form>

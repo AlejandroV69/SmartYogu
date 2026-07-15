@@ -122,7 +122,7 @@ export default function Administracion() {
   const handleAddFlavor = async (e) => {
     e.preventDefault();
     setSavingFlavor(true);
-    
+
     const { data, error } = await supabase
       .from('inventario')
       .insert([{
@@ -132,7 +132,7 @@ export default function Administracion() {
         stock: parseInt(newFlavor.stock, 10),
       }])
       .select();
-      
+
     if (error) {
       console.error('Error añadiendo sabor:', error.message);
       setError(`No se pudo añadir el sabor: ${error.message}`);
@@ -187,9 +187,8 @@ export default function Administracion() {
 
       {/* NavigationDrawer */}
       <aside
-        className={`fixed left-0 top-0 h-full w-60 bg-surface-container-low border-r border-outline-variant flex flex-col z-50 transition-transform duration-300 ease-in-out ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } md:translate-x-0`}
+        className={`fixed left-0 top-0 h-full w-60 bg-surface-container-low border-r border-outline-variant flex flex-col z-50 transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          } md:translate-x-0`}
         style={{ padding: '24px 0' }}
       >
         <div className="px-4 mb-8 flex items-center gap-3">
@@ -208,11 +207,10 @@ export default function Administracion() {
               <button
                 key={item.id}
                 onClick={() => { setActiveTab(item.id); setSidebarOpen(false); }}
-                className={`w-full flex items-center gap-4 px-4 py-2 transition-all duration-200 rounded-lg ${
-                  isActive
-                    ? 'text-primary font-bold border-r-4 border-primary bg-surface-container-high rounded-l-lg'
-                    : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest'
-                }`}
+                className={`w-full flex items-center gap-4 px-4 py-2 transition-all duration-200 rounded-lg ${isActive
+                  ? 'text-primary font-bold border-r-4 border-primary bg-surface-container-high rounded-l-lg'
+                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest'
+                  }`}
               >
                 <span
                   className="material-symbols-outlined"
@@ -229,14 +227,14 @@ export default function Administracion() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold">
-                AD
+                AV
               </div>
               <div>
-                <p className="text-sm font-medium text-on-surface">Admin</p>
+                <p className="text-sm font-medium text-on-surface">Alejandro Viana</p>
                 <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">Master Access</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={handleLogout}
               className="text-error hover:bg-error-container p-2 rounded-full transition-colors flex items-center justify-center active:scale-90"
               title="Cerrar Sesión"
@@ -302,190 +300,189 @@ export default function Administracion() {
           {(activeTab === 'Dashboard' || activeTab === 'Inventory') && (
             <section id="inventory">
               <div className="flex justify-between items-end mb-6">
-              <div>
-                <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Inventario de Sabores</h3>
-                <p className="text-on-surface-variant text-sm font-medium">Gestión de stock en tiempo real</p>
-              </div>
-              <button 
-                className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
-                onClick={() => setAddFlavorModalOpen(true)}
-              >
-                <span className="material-symbols-outlined">add</span>
-                <span className="hidden md:inline">Añadir Sabor</span>
-              </button>
-            </div>
-
-            {loadingInv ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {[1, 2, 3, 4].map((n) => (
-                  <div key={n} className="h-48 bg-surface-container rounded-xl animate-pulse border border-outline-variant" />
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {inventario.map((item) => (
-                  <div
-                    key={item.id}
-                    className="bento-card bg-surface-container border border-outline-variant rounded-xl p-4 flex flex-col justify-between"
-                  >
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h4 className="font-semibold text-lg text-primary">{item.sabor}</h4>
-                        <span className="text-xs text-on-surface-variant">{item.presentacion}</span>
-                      </div>
-                      <div className="bg-surface-container-highest p-1 rounded-lg">
-                        <span className="material-symbols-outlined text-on-surface-variant">icecream</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 my-4">
-                      <div className="flex-1">
-                        <p className="text-[10px] text-on-surface-variant uppercase font-bold">Stock</p>
-                        <div className="text-5xl font-extrabold text-on-surface leading-none tabular-nums tracking-tighter">
-                          {item.stock}
-                        </div>
-                        <p className="text-xs text-on-surface-variant mt-1">${Number(item.precio).toFixed(2)}</p>
-                      </div>
-                      <div className="flex flex-col gap-1">
-                        <button
-                          className="w-10 h-10 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-primary hover:text-on-primary transition-all active:scale-90 border border-outline-variant"
-                          onClick={() => updateStock(item, 1)}
-                        >
-                          <span className="material-symbols-outlined">add</span>
-                        </button>
-                        <button
-                          className="w-10 h-10 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-error hover:text-on-error transition-all active:scale-90 border border-outline-variant disabled:opacity-40"
-                          onClick={() => updateStock(item, -1)}
-                          disabled={item.stock === 0}
-                        >
-                          <span className="material-symbols-outlined">remove</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-outline-variant flex justify-between items-center gap-3">
-                      <div className="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                        <div
-                          className={`h-full transition-all duration-500 ${getStockColor(item.stock)}`}
-                          style={{ width: getStockWidth(item.stock) }}
-                        />
-                      </div>
-                      <span className={`text-[10px] font-bold ${
-                        item.stock <= 10 ? 'text-error' : item.stock <= 30 ? 'text-tertiary' : 'text-primary'
-                      }`}>
-                        {item.stock <= 10 ? 'BAJO' : item.stock <= 30 ? 'MEDIO' : 'OK'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                <div>
+                  <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Inventario de Sabores</h3>
+                  <p className="text-on-surface-variant text-sm font-medium">Gestión de stock en tiempo real</p>
                 </div>
-            )}
-          </section>
+                <button
+                  className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
+                  onClick={() => setAddFlavorModalOpen(true)}
+                >
+                  <span className="material-symbols-outlined">add</span>
+                  <span className="hidden md:inline">Añadir Sabor</span>
+                </button>
+              </div>
+
+              {loadingInv ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {[1, 2, 3, 4].map((n) => (
+                    <div key={n} className="h-48 bg-surface-container rounded-xl animate-pulse border border-outline-variant" />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  {inventario.map((item) => (
+                    <div
+                      key={item.id}
+                      className="bento-card bg-surface-container border border-outline-variant rounded-xl p-4 flex flex-col justify-between"
+                    >
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h4 className="font-semibold text-lg text-primary">{item.sabor}</h4>
+                          <span className="text-xs text-on-surface-variant">{item.presentacion}</span>
+                        </div>
+                        <div className="bg-surface-container-highest p-1 rounded-lg">
+                          <span className="material-symbols-outlined text-on-surface-variant">icecream</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-4 my-4">
+                        <div className="flex-1">
+                          <p className="text-[10px] text-on-surface-variant uppercase font-bold">Stock</p>
+                          <div className="text-5xl font-extrabold text-on-surface leading-none tabular-nums tracking-tighter">
+                            {item.stock}
+                          </div>
+                          <p className="text-xs text-on-surface-variant mt-1">${Number(item.precio).toFixed(2)}</p>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <button
+                            className="w-10 h-10 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-primary hover:text-on-primary transition-all active:scale-90 border border-outline-variant"
+                            onClick={() => updateStock(item, 1)}
+                          >
+                            <span className="material-symbols-outlined">add</span>
+                          </button>
+                          <button
+                            className="w-10 h-10 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-error hover:text-on-error transition-all active:scale-90 border border-outline-variant disabled:opacity-40"
+                            onClick={() => updateStock(item, -1)}
+                            disabled={item.stock === 0}
+                          >
+                            <span className="material-symbols-outlined">remove</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="pt-4 border-t border-outline-variant flex justify-between items-center gap-3">
+                        <div className="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all duration-500 ${getStockColor(item.stock)}`}
+                            style={{ width: getStockWidth(item.stock) }}
+                          />
+                        </div>
+                        <span className={`text-[10px] font-bold ${item.stock <= 10 ? 'text-error' : item.stock <= 30 ? 'text-tertiary' : 'text-primary'
+                          }`}>
+                          {item.stock <= 10 ? 'BAJO' : item.stock <= 30 ? 'MEDIO' : 'OK'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           )}
 
           {/* ── Sección 2: Cola de Verificación ─────────────────────── */}
           {(activeTab === 'Dashboard' || activeTab === 'Verification') && (
             <section id="verification">
               <div className="mb-6">
-              <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Cola de Verificación</h3>
-              <p className="text-on-surface-variant text-sm font-medium">
-                Validación manual de pagos y comprobantes bancarios
-              </p>
-            </div>
+                <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Cola de Verificación</h3>
+                <p className="text-on-surface-variant text-sm font-medium">
+                  Validación manual de pagos y comprobantes bancarios
+                </p>
+              </div>
 
-            {loadingPed ? (
-              <div className="space-y-3">
-                {[1, 2, 3].map((n) => (
-                  <div key={n} className="h-16 bg-surface-container rounded-xl animate-pulse border border-outline-variant" />
-                ))}
-              </div>
-            ) : pedidos.length === 0 ? (
-              <div className="text-center py-12 bg-surface-container rounded-xl border border-outline-variant">
-                <span className="material-symbols-outlined text-5xl text-on-surface-variant block mb-3">inbox</span>
-                <p className="text-on-surface-variant text-sm">No hay pagos pendientes de verificación.</p>
-              </div>
-            ) : (
-              <div className="bg-surface-container border border-outline-variant rounded-xl overflow-hidden overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[700px]">
-                  <thead>
-                    <tr className="bg-surface-container-high border-b border-outline-variant">
-                      {['Cliente', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
-                        <th key={h} className="px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-outline-variant">
-                    {pedidos.map((pedido) => (
-                      <tr
-                        key={pedido.id}
-                        className="hover:bg-surface-container-highest transition-colors group"
-                      >
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
-                              {pedido.cliente_nombre?.slice(0, 2).toUpperCase() || '??'}
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-on-surface">{pedido.cliente_nombre}</p>
-                              <p className="text-xs text-on-surface-variant">
-                                #{pedido.id.toString().slice(-8)}
-                              </p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-sm font-medium text-primary">
-                          ${Number(pedido.total).toFixed(2)}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-on-surface-variant">
-                          {formatDate(pedido.created_at)}
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getEstadoBadge(pedido.estado)}`}>
-                            {pedido.estado}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          {pedido.comprobante_url ? (
-                            <button
-                              className="inline-flex items-center gap-1 px-3 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all"
-                              onClick={() => { setModalRecibo(pedido); setModalOpen(true); }}
-                            >
-                              <span className="material-symbols-outlined text-sm">visibility</span>
-                              Ver
-                            </button>
-                          ) : (
-                            <span className="text-xs text-on-surface-variant italic">Sin archivo</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex justify-end gap-2">
-                            {pedido.estado !== 'Aprobado' && (
-                              <button
-                                className="px-3 py-1.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-medium hover:bg-green-500 hover:text-white transition-all active:scale-95"
-                                onClick={() => cambiarEstadoPedido(pedido.id, 'Aprobado')}
-                              >
-                                Aprobar
-                              </button>
-                            )}
-                            {pedido.estado !== 'Rechazado' && (
-                              <button
-                                className="px-3 py-1.5 bg-error/20 text-error border border-error/30 rounded-lg text-xs font-medium hover:bg-error hover:text-on-error transition-all active:scale-95"
-                                onClick={() => cambiarEstadoPedido(pedido.id, 'Rechazado')}
-                              >
-                                Rechazar
-                              </button>
-                            )}
-                          </div>
-                        </td>
+              {loadingPed ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((n) => (
+                    <div key={n} className="h-16 bg-surface-container rounded-xl animate-pulse border border-outline-variant" />
+                  ))}
+                </div>
+              ) : pedidos.length === 0 ? (
+                <div className="text-center py-12 bg-surface-container rounded-xl border border-outline-variant">
+                  <span className="material-symbols-outlined text-5xl text-on-surface-variant block mb-3">inbox</span>
+                  <p className="text-on-surface-variant text-sm">No hay pagos pendientes de verificación.</p>
+                </div>
+              ) : (
+                <div className="bg-surface-container border border-outline-variant rounded-xl overflow-hidden overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[700px]">
+                    <thead>
+                      <tr className="bg-surface-container-high border-b border-outline-variant">
+                        {['Cliente', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
+                          <th key={h} className="px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">
+                            {h}
+                          </th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant">
+                      {pedidos.map((pedido) => (
+                        <tr
+                          key={pedido.id}
+                          className="hover:bg-surface-container-highest transition-colors group"
+                        >
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
+                                {pedido.cliente_nombre?.slice(0, 2).toUpperCase() || '??'}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-on-surface">{pedido.cliente_nombre}</p>
+                                <p className="text-xs text-on-surface-variant">
+                                  #{pedido.id.toString().slice(-8)}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-sm font-medium text-primary">
+                            ${Number(pedido.total).toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-on-surface-variant">
+                            {formatDate(pedido.created_at)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getEstadoBadge(pedido.estado)}`}>
+                              {pedido.estado}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {pedido.comprobante_url ? (
+                              <button
+                                className="inline-flex items-center gap-1 px-3 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all"
+                                onClick={() => { setModalRecibo(pedido); setModalOpen(true); }}
+                              >
+                                <span className="material-symbols-outlined text-sm">visibility</span>
+                                Ver
+                              </button>
+                            ) : (
+                              <span className="text-xs text-on-surface-variant italic">Sin archivo</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex justify-end gap-2">
+                              {pedido.estado !== 'Aprobado' && (
+                                <button
+                                  className="px-3 py-1.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-medium hover:bg-green-500 hover:text-white transition-all active:scale-95"
+                                  onClick={() => cambiarEstadoPedido(pedido.id, 'Aprobado')}
+                                >
+                                  Aprobar
+                                </button>
+                              )}
+                              {pedido.estado !== 'Rechazado' && (
+                                <button
+                                  className="px-3 py-1.5 bg-error/20 text-error border border-error/30 rounded-lg text-xs font-medium hover:bg-error hover:text-on-error transition-all active:scale-95"
+                                  onClick={() => cambiarEstadoPedido(pedido.id, 'Rechazado')}
+                                >
+                                  Rechazar
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
           )}
         </div>
 
@@ -592,7 +589,7 @@ export default function Administracion() {
                   placeholder="Ej. Fresa"
                   className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
                   value={newFlavor.sabor}
-                  onChange={(e) => setNewFlavor({...newFlavor, sabor: e.target.value})}
+                  onChange={(e) => setNewFlavor({ ...newFlavor, sabor: e.target.value })}
                 />
               </div>
               <div>
@@ -603,7 +600,7 @@ export default function Administracion() {
                   placeholder="Ej. Pequeño"
                   className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
                   value={newFlavor.presentacion}
-                  onChange={(e) => setNewFlavor({...newFlavor, presentacion: e.target.value})}
+                  onChange={(e) => setNewFlavor({ ...newFlavor, presentacion: e.target.value })}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -617,7 +614,7 @@ export default function Administracion() {
                     placeholder="2.50"
                     className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
                     value={newFlavor.precio}
-                    onChange={(e) => setNewFlavor({...newFlavor, precio: e.target.value})}
+                    onChange={(e) => setNewFlavor({ ...newFlavor, precio: e.target.value })}
                   />
                 </div>
                 <div>
@@ -629,7 +626,7 @@ export default function Administracion() {
                     placeholder="100"
                     className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
                     value={newFlavor.stock}
-                    onChange={(e) => setNewFlavor({...newFlavor, stock: e.target.value})}
+                    onChange={(e) => setNewFlavor({ ...newFlavor, stock: e.target.value })}
                   />
                 </div>
               </div>
