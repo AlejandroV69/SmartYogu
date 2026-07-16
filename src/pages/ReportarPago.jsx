@@ -111,11 +111,9 @@ export default function ReportarPago() {
         console.warn('No se pudo subir el archivo al Storage:', uploadError.message);
         setError(`Aviso: No se pudo subir la imagen (${uploadError.message}). Se marcará el pedido de todas formas.`);
       } else {
-        // Obtener URL pública del archivo
-        const { data: urlData } = supabase.storage
-          .from(BUCKET_NAME)
-          .getPublicUrl(filePath);
-        comprobanteUrl = urlData?.publicUrl || null;
+        // Como el bucket es privado, solo guardamos el path. 
+        // El panel de admin generará una URL firmada (Signed URL) para verlo.
+        comprobanteUrl = filePath;
       }
 
       // 2. PATCH: actualizar pedido

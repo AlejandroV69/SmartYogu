@@ -9,6 +9,7 @@ export default function Administracion() {
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalRecibo, setModalRecibo] = useState(null); // pedido seleccionado para ver recibo
+  const [signedUrl, setSignedUrl] = useState(null); // url firmada temporal
   const [addFlavorModalOpen, setAddFlavorModalOpen] = useState(false);
   const [editFlavorModalOpen, setEditFlavorModalOpen] = useState(false);
   const [addVariantModalOpen, setAddVariantModalOpen] = useState(false);
@@ -44,6 +45,32 @@ export default function Administracion() {
     }
     fetchInventario();
   }, []);
+
+  // ── GET: URL firmada para comprobante privado ────────────────────
+  useEffect(() => {
+    async function fetchSignedUrl() {
+      if (modalOpen && modalRecibo?.comprobante_url) {
+        let filePath = modalRecibo.comprobante_url;
+        // Si es una URL completa (viejo bucket público), extraer solo el nombre
+        if (filePath.startsWith('http')) {
+          const parts = filePath.split('/');
+          filePath = parts[parts.length - 1];
+        }
+        // Generar URL firmada válida por 1 hora
+        const { data, error } = await supabase.storage
+          .from('comprobantes')
+          .createSignedUrl(filePath, 3600);
+        if (data) {
+          setSignedUrl(data.signedUrl);
+        } else {
+          console.error("Error generando URL firmada:", error);
+        }
+      } else {
+        setSignedUrl(null);
+      }
+    }
+    fetchSignedUrl();
+  }, [modalOpen, modalRecibo]);
 
   // ── GET: pedidos (cola de verificación) ──────────────────────────
   useEffect(() => {
@@ -620,13 +647,19 @@ export default function Administracion() {
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="p-6 bg-surface-container-lowest">
+            <div className="p-6 bg-surface-container-lowest flex justify-center">
               {modalRecibo.comprobante_url ? (
-                <img
-                  src={modalRecibo.comprobante_url}
-                  alt="Comprobante de pago"
-                  className="w-full max-h-[60vh] object-contain rounded-lg border border-outline-variant"
-                />
+                signedUrl ? (
+                  <img
+                    src={signedUrl}
+                    alt="Comprobante de pago"
+                    className="w-full max-h-[60vh] object-contain rounded-lg border border-outline-variant"
+                  />
+                ) : (
+                  <div className="w-full aspect-[3/4] bg-surface-container-highest rounded-lg flex items-center justify-center border border-outline-variant animate-pulse">
+                    <span className="material-symbols-outlined text-on-surface-variant text-4xl animate-spin">sync</span>
+                  </div>
+                )
               ) : (
                 <div className="w-full aspect-[3/4] bg-surface-container-highest rounded-lg flex items-center justify-center border border-outline-variant">
                   <span className="material-symbols-outlined text-on-surface-variant text-6xl">receipt_long</span>
