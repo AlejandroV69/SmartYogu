@@ -4,7 +4,8 @@ import { supabase } from '../supabaseClient';
 const BUCKET_NAME = 'comprobantes';
 
 export default function ReportarPago() {
-  // ── Estado UI ────────────────────────────────────────────────────
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // ── Estado General ────────────────────────────────────────────────────
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [copied, setCopied] = useState('');
   const [file, setFile] = useState(null);
@@ -12,8 +13,11 @@ export default function ReportarPago() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
+  const [numeroTransaccion, setNumeroTransaccion] = useState('');
 
-  // ── Datos de pedidos ─────────────────────────────────────────────
+  const [bcvRate, setBcvRate] = useState(null);
+
+  // ── Funciones de Utilidad ─────────────────────────────────────────────
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -37,6 +41,22 @@ export default function ReportarPago() {
       setLoading(false);
     }
     fetchPedidos();
+  }, []);
+
+  // ── GET: Tasa BCV ────────────────────────────────────────────────
+  useEffect(() => {
+    async function fetchBCV() {
+      try {
+        const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
+        const data = await res.json();
+        if (data && data.promedio) {
+          setBcvRate(data.promedio);
+        }
+      } catch (err) {
+        console.error('Error obteniendo tasa BCV:', err);
+      }
+    }
+    fetchBCV();
   }, []);
 
   // ── Helpers ──────────────────────────────────────────────────────
@@ -68,6 +88,10 @@ export default function ReportarPago() {
   // ── PATCH: subir comprobante y actualizar pedido ─────────────────
   const handleSubmit = async () => {
     if (!selectedOrder || !file) return;
+    if (!numeroTransaccion.trim()) {
+      setError('Por favor ingresa el número de transacción.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
@@ -100,6 +124,7 @@ export default function ReportarPago() {
         .update({
           estado: 'Pago por Verificar',
           comprobante_url: comprobanteUrl,
+          numero_transaccion: numeroTransaccion.trim(),
         })
         .eq('id', selectedOrder.id);
 
@@ -110,6 +135,7 @@ export default function ReportarPago() {
       setSelectedOrder(null);
       setFile(null);
       setFileName('');
+      setNumeroTransaccion('');
       setDone(true);
       setTimeout(() => setDone(false), 3000);
     } catch (err) {
@@ -125,21 +151,73 @@ export default function ReportarPago() {
       {/* TopAppBar */}
       <header className="fixed top-0 w-full z-50 bg-surface flex justify-between items-center px-4 h-16 border-b border-outline-variant">
         <div className="flex items-center gap-4">
-          <span className="material-symbols-outlined text-primary">menu</span>
-          <h1 className="font-bold text-xl text-primary tracking-tight">SmartYogu</h1>
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="material-symbols-outlined text-primary hover:bg-surface-container-highest transition-colors p-2 rounded-full active:scale-95 duration-150"
+          >
+            menu
+          </button>
+          <div className="flex items-center gap-2">
+            <img src="/favicon.png" alt="THÖRGURT Logo" className="w-8 h-8 object-contain drop-shadow-md" />
+            <h1 className="font-bold text-xl text-primary tracking-tight">THÖRGURT</h1>
+          </div>
         </div>
         <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant">
           <span className="material-symbols-outlined text-primary">account_circle</span>
         </div>
       </header>
 
+      {/* Sidebar Overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-[60] backdrop-blur-sm transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Drawer */}
+      <aside className={`fixed top-0 left-0 h-full w-72 bg-surface border-r border-outline-variant z-[70] transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+          <div className="flex items-center gap-3">
+            <img src="/favicon.png" alt="THÖRGURT Logo" className="w-8 h-8 object-contain" />
+            <h2 className="font-bold text-xl text-primary tracking-tight">Menú</h2>
+          </div>
+          <button onClick={() => setSidebarOpen(false)} className="text-on-surface-variant hover:text-error transition-colors">
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <nav className="p-4 flex flex-col gap-2">
+          <a href="/" className="flex items-center gap-3 p-4 rounded-xl text-on-surface-variant hover:bg-surface-container-highest transition-colors font-medium">
+            <span className="material-symbols-outlined">icecream</span>
+            Realizar Pedido
+          </a>
+          <a href="/pago" className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 text-primary font-bold border border-primary/20">
+            <span className="material-symbols-outlined">receipt_long</span>
+            Reportar Pago
+          </a>
+          <div className="my-4 border-t border-outline-variant"></div>
+          <a href="/login" className="flex items-center gap-3 p-4 rounded-xl text-on-surface-variant hover:bg-surface-container-highest transition-colors font-medium">
+            <span className="material-symbols-outlined">admin_panel_settings</span>
+            Acceso Privado
+          </a>
+        </nav>
+      </aside>
+
       <main className="pt-20 pb-24 px-5 max-w-lg mx-auto">
         {/* Header */}
-        <div className="mb-6">
-          <h2 className="font-bold text-2xl text-on-surface mb-1">Pagos Pendientes</h2>
-          <p className="text-on-surface-variant text-sm font-medium">
-            Gestiona tus facturas y confirma tus transferencias.
-          </p>
+        <div className="mb-6 flex justify-between items-end">
+          <div>
+            <h2 className="font-bold text-2xl text-on-surface mb-1">Pagos Pendientes</h2>
+            <p className="text-on-surface-variant text-sm font-medium">
+              Gestiona tus facturas y confirma tus transferencias.
+            </p>
+          </div>
+          {bcvRate && (
+            <div className="text-right">
+              <span className="text-[10px] uppercase font-bold text-tertiary tracking-widest block">Tasa BCV</span>
+              <span className="text-sm font-bold text-on-surface">{bcvRate.toFixed(2)} Bs</span>
+            </div>
+          )}
         </div>
 
         {/* Buscador de pedidos */}
@@ -203,8 +281,8 @@ export default function ReportarPago() {
                 <div
                   key={order.id}
                   className={`cursor-pointer p-4 rounded-xl border transition-all flex flex-col gap-2 ${selectedOrder?.id === order.id
-                      ? 'border-primary bg-primary/10'
-                      : 'border-outline-variant bg-surface-container-low hover:bg-surface-container'
+                    ? 'border-primary bg-primary/10'
+                    : 'border-outline-variant bg-surface-container-low hover:bg-surface-container'
                     }`}
                   onClick={() => { setSelectedOrder(order); setError(null); }}
                 >
@@ -213,10 +291,17 @@ export default function ReportarPago() {
                       <span className="text-primary text-xs font-bold uppercase tracking-widest">
                         PEDIDO #{order.id.toString().slice(-6).toUpperCase()}
                       </span>
-                      <h3 className="font-semibold text-2xl text-on-surface mt-1">
+                      <h3 className="font-semibold text-2xl text-on-surface mt-1 leading-none">
                         ${Number(order.total).toFixed(2)}
                       </h3>
-                      <p className="text-xs text-on-surface-variant mt-0.5">{order.cliente_nombre}</p>
+                      {bcvRate && (
+                        <p className="text-sm font-medium text-on-surface-variant mt-0.5">
+                          ~ {(Number(order.total) * bcvRate).toFixed(2)} Bs
+                        </p>
+                      )}
+                      <p className="text-xs text-on-surface-variant mt-1 font-medium bg-surface-container w-fit px-2 py-0.5 rounded">
+                        {order.cliente_nombre}
+                      </p>
                     </div>
                     <span className="px-2 py-1 rounded bg-error-container text-error text-[10px] font-bold uppercase tracking-tighter">
                       PENDIENTE
@@ -276,10 +361,32 @@ export default function ReportarPago() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-on-surface-variant text-sm font-medium">Monto exacto</span>
-                  <span className="text-primary font-bold text-lg">
-                    ${Number(selectedOrder.total).toFixed(2)}
-                  </span>
+                  <div className="text-right leading-tight">
+                    <span className="text-primary font-bold text-lg block">
+                      ${Number(selectedOrder.total).toFixed(2)}
+                    </span>
+                    {bcvRate && (
+                      <span className="text-on-surface-variant font-medium text-sm">
+                        ~ {(Number(selectedOrder.total) * bcvRate).toFixed(2)} Bs
+                      </span>
+                    )}
+                  </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Número de transacción */}
+            <div className="space-y-2">
+              <h4 className="text-on-surface text-xs font-bold uppercase tracking-widest">Número de Transacción</h4>
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">tag</span>
+                <input
+                  type="text"
+                  placeholder="Ej: 1234567890"
+                  className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl pl-12 pr-4 py-3 focus:border-primary focus:outline-none text-on-surface transition-colors"
+                  value={numeroTransaccion}
+                  onChange={(e) => setNumeroTransaccion(e.target.value)}
+                />
               </div>
             </div>
 
@@ -324,13 +431,13 @@ export default function ReportarPago() {
 
               {/* Submit Button */}
               <button
-                className={`w-full h-14 font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-150 ${file && !submitting
-                    ? 'bg-primary text-on-primary active:scale-95 cursor-pointer'
-                    : submitting
-                      ? 'bg-primary/70 text-on-primary cursor-not-allowed'
-                      : 'bg-primary/30 text-on-surface/30 cursor-not-allowed'
+                className={`w-full h-14 font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-150 ${file && numeroTransaccion.trim() && !submitting
+                  ? 'bg-primary text-on-primary active:scale-95 cursor-pointer'
+                  : submitting
+                    ? 'bg-primary/70 text-on-primary cursor-not-allowed'
+                    : 'bg-primary/30 text-on-surface/30 cursor-not-allowed'
                   }`}
-                disabled={!file || submitting}
+                disabled={!file || !numeroTransaccion.trim() || submitting}
                 onClick={handleSubmit}
               >
                 {submitting ? (
@@ -349,22 +456,6 @@ export default function ReportarPago() {
           </div>
         )}
       </main>
-
-      {/* BottomNavBar */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface border-t border-outline-variant shadow-lg">
-        <a className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-200" href="/">
-          <span className="material-symbols-outlined">shopping_cart</span>
-          <span className="text-[11px] font-semibold">Order</span>
-        </a>
-        <a className="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 active:scale-90 duration-200" href="#">
-          <span className="material-symbols-outlined">account_balance_wallet</span>
-          <span className="text-[11px] font-semibold">Payments</span>
-        </a>
-        <a className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-200" href="#">
-          <span className="material-symbols-outlined">receipt_long</span>
-          <span className="text-[11px] font-semibold">Status</span>
-        </a>
-      </nav>
     </div>
   );
 }

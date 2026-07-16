@@ -37,14 +37,24 @@ export default function Login() {
         <div className="absolute -bottom-[20%] -left-[10%] w-[50%] h-[50%] bg-tertiary/20 blur-[120px] rounded-full"></div>
       </div>
 
-      <div className="w-full max-w-md bg-surface-container/80 backdrop-blur-xl border border-outline-variant p-8 rounded-3xl shadow-2xl relative z-10">
+      <div className="w-full max-w-md relative z-10">
+        {/* Back button */}
+        <button 
+          onClick={() => navigate('/')}
+          className="mb-6 flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors active:scale-95 w-fit"
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+          <span className="font-medium text-sm">Volver al inicio</span>
+        </button>
+
+        <div className="bg-surface-container/80 backdrop-blur-xl border border-outline-variant p-8 rounded-3xl shadow-2xl">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-primary-container text-on-primary-container rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg border border-primary/20">
-            <span className="material-symbols-outlined text-4xl">lock</span>
+          <div className="w-24 h-24 bg-primary-container/20 text-on-primary-container rounded-[2rem] flex items-center justify-center mx-auto mb-4 shadow-lg border border-primary/20 overflow-hidden">
+            <img src="/favicon.png" alt="THÖRGURT Logo" className="w-16 h-16 object-contain" />
           </div>
-          <h1 className="text-3xl font-bold text-on-surface tracking-tight">Acceso Privado</h1>
+          <h1 className="text-3xl font-bold text-on-surface tracking-tight">Acceso Privado — THÖRGURT</h1>
           <p className="text-on-surface-variant text-sm mt-2">
-            Inicia sesión para gestionar SmartYogu
+            Inicia sesión para gestionar THÖRGURT
           </p>
         </div>
 
@@ -116,6 +126,7 @@ export default function Login() {
             )}
           </button>
         </form>
+        </div>
       </div>
     </div>
   );
