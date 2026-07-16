@@ -251,7 +251,7 @@ export default function RealizarPedido() {
         </div>
         <nav className="p-4 flex flex-col gap-2">
           <a href="/" className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 text-primary font-bold border border-primary/20">
-            <span className="material-symbols-outlined">icecream</span>
+            <span className="material-symbols-outlined">storefront</span>
             Realizar Pedido
           </a>
           <a href="/pago" className="flex items-center gap-3 p-4 rounded-xl text-on-surface-variant hover:bg-surface-container-highest transition-colors font-medium">

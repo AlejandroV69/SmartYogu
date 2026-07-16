@@ -162,9 +162,6 @@ export default function ReportarPago() {
             <h1 className="font-bold text-xl text-primary tracking-tight">THÖRGURT</h1>
           </div>
         </div>
-        <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant">
-          <span className="material-symbols-outlined text-primary">account_circle</span>
-        </div>
       </header>
 
       {/* Sidebar Overlay */}
@@ -188,7 +185,7 @@ export default function ReportarPago() {
         </div>
         <nav className="p-4 flex flex-col gap-2">
           <a href="/" className="flex items-center gap-3 p-4 rounded-xl text-on-surface-variant hover:bg-surface-container-highest transition-colors font-medium">
-            <span className="material-symbols-outlined">icecream</span>
+            <span className="material-symbols-outlined">storefront</span>
             Realizar Pedido
           </a>
           <a href="/pago" className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 text-primary font-bold border border-primary/20">
@@ -205,17 +202,17 @@ export default function ReportarPago() {
 
       <main className="pt-20 pb-24 px-5 max-w-lg mx-auto">
         {/* Header */}
-        <div className="mb-6 flex justify-between items-end">
-          <div>
-            <h2 className="font-bold text-2xl text-on-surface mb-1">Pagos Pendientes</h2>
-            <p className="text-on-surface-variant text-sm font-medium">
-              Gestiona tus facturas y confirma tus transferencias.
-            </p>
-          </div>
+        <div className="mb-6">
+          <h2 className="font-bold text-2xl text-on-surface mb-1">Pagos Pendientes</h2>
+          <p className="text-on-surface-variant text-sm font-medium mb-3">
+            Gestiona tus facturas y confirma tus transferencias.
+          </p>
           {bcvRate && (
-            <div className="text-right">
-              <span className="text-[10px] uppercase font-bold text-tertiary tracking-widest block">Tasa BCV</span>
-              <span className="text-sm font-bold text-on-surface">{bcvRate.toFixed(2)} Bs</span>
+            <div className="inline-flex items-center gap-2 bg-surface-container-low border border-outline-variant px-3 py-1.5 rounded-lg">
+              <span className="material-symbols-outlined text-[16px] text-tertiary">payments</span>
+              <span className="text-[11px] font-medium text-on-surface-variant uppercase tracking-widest">
+                Tasa BCV hoy: <strong className="text-on-surface">{bcvRate.toFixed(2)} Bs</strong>
+              </span>
             </div>
           )}
         </div>
