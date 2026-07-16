@@ -1,23 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-// Iconos por sabor (fallback si la BD no tiene campo de icono)
-const FLAVOR_ICONS = {
-  default: { icon: 'icecream', color: 'text-primary' },
-  fresa: { icon: 'fiber_manual_record', color: 'text-primary' },
-  melocoton: { icon: 'restaurant_menu', color: 'text-tertiary' },
-  melocotón: { icon: 'restaurant_menu', color: 'text-tertiary' },
-  natural: { icon: 'cloud', color: 'text-on-surface-variant' },
-  mix: { icon: 'auto_awesome', color: 'text-secondary' },
-  mango: { icon: 'nutrition', color: 'text-tertiary' },
-  coco: { icon: 'spa', color: 'text-secondary' },
-  arandano: { icon: 'icecream', color: 'text-primary' },
-  arándano: { icon: 'icecream', color: 'text-primary' },
+// Emojis por sabor para que sea más visual y representativo
+const FLAVOR_META = {
+  default: { emoji: '🥣', color: 'border-primary bg-primary/10' },
+  fresa: { emoji: '🍓', color: 'border-red-400 bg-red-400/10' },
+  melocoton: { emoji: '🍑', color: 'border-orange-400 bg-orange-400/10' },
+  melocotón: { emoji: '🍑', color: 'border-orange-400 bg-orange-400/10' },
+  durazno: { emoji: '🍑', color: 'border-orange-400 bg-orange-400/10' },
+  natural: { emoji: '🥛', color: 'border-gray-300 bg-gray-200/20' },
+  mix: { emoji: '✨', color: 'border-purple-400 bg-purple-400/10' },
+  mango: { emoji: '🥭', color: 'border-yellow-400 bg-yellow-400/10' },
+  coco: { emoji: '🥥', color: 'border-stone-400 bg-stone-400/10' },
+  arandano: { emoji: '🫐', color: 'border-blue-500 bg-blue-500/10' },
+  arándano: { emoji: '🫐', color: 'border-blue-500 bg-blue-500/10' },
+  piña: { emoji: '🍍', color: 'border-yellow-500 bg-yellow-500/10' },
+  pina: { emoji: '🍍', color: 'border-yellow-500 bg-yellow-500/10' },
+  parchita: { emoji: '🍈', color: 'border-yellow-600 bg-yellow-600/10' },
+  maracuya: { emoji: '🍈', color: 'border-yellow-600 bg-yellow-600/10' },
+  limon: { emoji: '🍋', color: 'border-green-400 bg-green-400/10' },
+  limón: { emoji: '🍋', color: 'border-green-400 bg-green-400/10' },
+  mora: { emoji: '🍇', color: 'border-purple-600 bg-purple-600/10' }
 };
 
 function getFlavorMeta(sabor = '') {
   const key = sabor.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(' ')[0];
-  return FLAVOR_ICONS[key] || FLAVOR_ICONS.default;
+  return FLAVOR_META[key] || FLAVOR_META.default;
 }
 
 export default function RealizarPedido() {
@@ -335,16 +343,13 @@ export default function RealizarPedido() {
                       key={producto.id}
                       type="button"
                       onClick={() => handleSelectSabor(producto)}
-                      className={`bg-surface-container border p-4 rounded-xl flex flex-col items-center gap-2 transition-all ${isSelected
-                          ? 'border-primary bg-primary/10'
-                          : 'border-outline-variant hover:bg-surface-container-highest'
+                      className={`border p-4 rounded-xl flex flex-col items-center gap-2 transition-all ${isSelected
+                          ? `${meta.color} scale-105 shadow-md`
+                          : 'bg-surface-container border-outline-variant hover:bg-surface-container-highest'
                         }`}
                     >
-                      <span
-                        className={`material-symbols-outlined text-3xl ${meta.color}`}
-                        style={{ fontVariationSettings: "'FILL' 1" }}
-                      >
-                        {meta.icon}
+                      <span className="text-3xl filter drop-shadow-sm">
+                        {meta.emoji}
                       </span>
                       <span className="text-sm font-medium text-on-surface">{producto.sabor}</span>
                     </button>
@@ -396,9 +401,9 @@ export default function RealizarPedido() {
                 <button
                   type="button"
                   onClick={addToCart}
-                  className="w-full py-3 bg-secondary-container text-on-secondary-container border border-secondary/30 rounded-xl font-bold flex items-center justify-center gap-2 active:scale-95 transition-all mt-4"
+                  className="w-full py-4 bg-primary text-on-primary shadow-[0_8px_20px_rgba(76,215,246,0.3)] rounded-xl font-extrabold text-lg flex items-center justify-center gap-2 active:scale-95 transition-all mt-6 hover:brightness-110"
                 >
-                  <span className="material-symbols-outlined">add_shopping_cart</span>
+                  <span className="material-symbols-outlined text-2xl">add_shopping_cart</span>
                   Añadir al Carrito
                 </button>
               )}

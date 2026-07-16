@@ -13,9 +13,10 @@ export default function ReportarPago() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
+  const [numeroTransaccion, setNumeroTransaccion] = useState('');
 
   const [bcvRate, setBcvRate] = useState(null);
-  
+
   // ── Funciones de Utilidad ─────────────────────────────────────────────
   const [pedidos, setPedidos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +88,10 @@ export default function ReportarPago() {
   // ── PATCH: subir comprobante y actualizar pedido ─────────────────
   const handleSubmit = async () => {
     if (!selectedOrder || !file) return;
+    if (!numeroTransaccion.trim()) {
+      setError('Por favor ingresa el número de transacción.');
+      return;
+    }
     setSubmitting(true);
     setError(null);
 
@@ -119,6 +124,7 @@ export default function ReportarPago() {
         .update({
           estado: 'Pago por Verificar',
           comprobante_url: comprobanteUrl,
+          numero_transaccion: numeroTransaccion.trim(),
         })
         .eq('id', selectedOrder.id);
 
@@ -129,6 +135,7 @@ export default function ReportarPago() {
       setSelectedOrder(null);
       setFile(null);
       setFileName('');
+      setNumeroTransaccion('');
       setDone(true);
       setTimeout(() => setDone(false), 3000);
     } catch (err) {
@@ -144,7 +151,7 @@ export default function ReportarPago() {
       {/* TopAppBar */}
       <header className="fixed top-0 w-full z-50 bg-surface flex justify-between items-center px-4 h-16 border-b border-outline-variant">
         <div className="flex items-center gap-4">
-          <button 
+          <button
             onClick={() => setSidebarOpen(true)}
             className="material-symbols-outlined text-primary hover:bg-surface-container-highest transition-colors p-2 rounded-full active:scale-95 duration-150"
           >
@@ -162,7 +169,7 @@ export default function ReportarPago() {
 
       {/* Sidebar Overlay */}
       {sidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-[60] backdrop-blur-sm transition-opacity"
           onClick={() => setSidebarOpen(false)}
         />
@@ -368,6 +375,21 @@ export default function ReportarPago() {
               </div>
             </div>
 
+            {/* Número de transacción */}
+            <div className="space-y-2">
+              <h4 className="text-on-surface text-xs font-bold uppercase tracking-widest">Número de Transacción</h4>
+              <div className="relative">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">tag</span>
+                <input
+                  type="text"
+                  placeholder="Ej: 1234567890"
+                  className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl pl-12 pr-4 py-3 focus:border-primary focus:outline-none text-on-surface transition-colors"
+                  value={numeroTransaccion}
+                  onChange={(e) => setNumeroTransaccion(e.target.value)}
+                />
+              </div>
+            </div>
+
             {/* File Upload */}
             <div className="space-y-4">
               <h4 className="text-on-surface text-xs font-bold uppercase tracking-widest">
@@ -409,13 +431,13 @@ export default function ReportarPago() {
 
               {/* Submit Button */}
               <button
-                className={`w-full h-14 font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-150 ${file && !submitting
+                className={`w-full h-14 font-bold rounded-xl flex items-center justify-center gap-2 transition-all duration-150 ${file && numeroTransaccion.trim() && !submitting
                   ? 'bg-primary text-on-primary active:scale-95 cursor-pointer'
                   : submitting
                     ? 'bg-primary/70 text-on-primary cursor-not-allowed'
                     : 'bg-primary/30 text-on-surface/30 cursor-not-allowed'
                   }`}
-                disabled={!file || submitting}
+                disabled={!file || !numeroTransaccion.trim() || submitting}
                 onClick={handleSubmit}
               >
                 {submitting ? (
@@ -434,22 +456,6 @@ export default function ReportarPago() {
           </div>
         )}
       </main>
-
-      {/* BottomNavBar */}
-      <nav className="fixed bottom-0 left-0 w-full z-50 flex justify-around items-center px-4 py-2 bg-surface border-t border-outline-variant shadow-lg">
-        <a className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-200" href="/">
-          <span className="material-symbols-outlined">shopping_cart</span>
-          <span className="text-[11px] font-semibold">Order</span>
-        </a>
-        <a className="flex flex-col items-center justify-center bg-secondary-container text-on-secondary-container rounded-full px-4 py-1 active:scale-90 duration-200" href="#">
-          <span className="material-symbols-outlined">account_balance_wallet</span>
-          <span className="text-[11px] font-semibold">Payments</span>
-        </a>
-        <a className="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary transition-all active:scale-90 duration-200" href="#">
-          <span className="material-symbols-outlined">receipt_long</span>
-          <span className="text-[11px] font-semibold">Status</span>
-        </a>
-      </nav>
     </div>
   );
 }

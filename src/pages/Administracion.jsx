@@ -10,7 +10,12 @@ export default function Administracion() {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalRecibo, setModalRecibo] = useState(null); // pedido seleccionado para ver recibo
   const [addFlavorModalOpen, setAddFlavorModalOpen] = useState(false);
+  const [editFlavorModalOpen, setEditFlavorModalOpen] = useState(false);
+  const [addVariantModalOpen, setAddVariantModalOpen] = useState(false);
+  const [selectedFlavorForVariant, setSelectedFlavorForVariant] = useState('');
+  const [flavorToEdit, setFlavorToEdit] = useState(null);
   const [newFlavor, setNewFlavor] = useState({ sabor: '', presentacion: '', precio: '', stock: '' });
+  const [newVariant, setNewVariant] = useState({ presentacion: '', precio: '', stock: '' });
   const [savingFlavor, setSavingFlavor] = useState(false);
 
   // ── Datos ─────────────────────────────────────────────────────────
@@ -46,7 +51,7 @@ export default function Administracion() {
       setLoadingPed(true);
       const { data, error } = await supabase
         .from('pedidos')
-        .select('id, cliente_nombre, total, estado, comprobante_url, created_at')
+        .select('id, cliente_nombre, total, estado, comprobante_url, created_at, numero_transaccion')
         .in('estado', ['Pago por Verificar', 'Pendiente por Pago'])
         .order('created_at', { ascending: false });
 
@@ -118,6 +123,32 @@ export default function Administracion() {
     }
   };
 
+  // ── POST: añadir nueva presentación a un sabor existente ───────────
+  const handleAddVariant = async (e) => {
+    e.preventDefault();
+    setSavingFlavor(true);
+
+    const { data, error } = await supabase
+      .from('inventario')
+      .insert([{
+        sabor: selectedFlavorForVariant,
+        presentacion: newVariant.presentacion,
+        precio: parseFloat(newVariant.precio),
+        stock: parseInt(newVariant.stock, 10),
+      }])
+      .select();
+
+    if (error) {
+      console.error('Error añadiendo presentación:', error.message);
+      setError(`No se pudo añadir la presentación: ${error.message}`);
+    } else if (data) {
+      setInventario((prev) => [...prev, data[0]]);
+      setAddVariantModalOpen(false);
+      setNewVariant({ presentacion: '', precio: '', stock: '' });
+    }
+    setSavingFlavor(false);
+  };
+
   // ── POST: añadir nuevo sabor ───────────────────────────────────────
   const handleAddFlavor = async (e) => {
     e.preventDefault();
@@ -143,6 +174,49 @@ export default function Administracion() {
       setNewFlavor({ sabor: '', presentacion: '', precio: '', stock: '' });
     }
     setSavingFlavor(false);
+  };
+
+  // ── UPDATE: editar sabor ───────────────────────────────────────────
+  const handleEditFlavor = async (e) => {
+    e.preventDefault();
+    setSavingFlavor(true);
+
+    const { data, error } = await supabase
+      .from('inventario')
+      .update({
+        sabor: flavorToEdit.sabor,
+        presentacion: flavorToEdit.presentacion,
+        precio: parseFloat(flavorToEdit.precio),
+        stock: parseInt(flavorToEdit.stock, 10),
+      })
+      .eq('id', flavorToEdit.id)
+      .select();
+
+    if (error) {
+      console.error('Error editando sabor:', error.message);
+      setError(`No se pudo editar el sabor: ${error.message}`);
+    } else if (data && data.length > 0) {
+      setInventario((prev) => prev.map(p => p.id === flavorToEdit.id ? data[0] : p).sort((a, b) => a.sabor.localeCompare(b.sabor)));
+      setEditFlavorModalOpen(false);
+      setFlavorToEdit(null);
+    } else {
+       setError('El servidor no actualizó el registro. Probable causa: RLS de Supabase está activo y bloqueando escrituras.');
+    }
+    setSavingFlavor(false);
+  };
+
+  const getInventarioAgrupado = () => {
+    const agrupado = inventario.reduce((acc, item) => {
+      if (!acc[item.sabor]) {
+        acc[item.sabor] = {
+          sabor: item.sabor,
+          variantes: []
+        };
+      }
+      acc[item.sabor].variantes.push(item);
+      return acc;
+    }, {});
+    return Object.values(agrupado).sort((a, b) => a.sabor.localeCompare(b.sabor));
   };
 
   // ── Helpers UI ───────────────────────────────────────────────────
@@ -197,10 +271,10 @@ export default function Administracion() {
         </div>
         <nav className="flex-1 space-y-1 px-2">
           {[
-            { icon: 'dashboard', label: 'Dashboard', id: 'Dashboard' },
-            { icon: 'inventory_2', label: 'Inventory', id: 'Inventory' },
-            { icon: 'verified_user', label: 'Verification', id: 'Verification' },
-            { icon: 'settings', label: 'Settings', id: 'Settings' },
+            { icon: 'dashboard', label: 'Inicio', id: 'Dashboard' },
+            { icon: 'inventory_2', label: 'Inventario', id: 'Inventory' },
+            { icon: 'verified_user', label: 'Verificación', id: 'Verification' },
+            { icon: 'settings', label: 'Configuración', id: 'Settings' },
           ].map((item) => {
             const isActive = activeTab === item.id;
             return (
@@ -291,7 +365,7 @@ export default function Administracion() {
             <div className="relative z-10 p-6 flex flex-col justify-end h-full">
               <p className="text-primary font-bold text-xs uppercase tracking-tighter mb-1">Resumen Operativo</p>
               <h1 className="font-extrabold text-3xl md:text-5xl text-on-surface leading-none">
-                Freshness Dashboard
+                Panel Principal
               </h1>
             </div>
           </section>
@@ -321,57 +395,79 @@ export default function Administracion() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {inventario.map((item) => (
+                  {getInventarioAgrupado().map((grupo) => (
                     <div
-                      key={item.id}
-                      className="bento-card bg-surface-container border border-outline-variant rounded-xl p-4 flex flex-col justify-between"
+                      key={grupo.sabor}
+                      className="bento-card bg-surface-container border border-outline-variant rounded-xl p-4 flex flex-col gap-4"
                     >
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h4 className="font-semibold text-lg text-primary">{item.sabor}</h4>
-                          <span className="text-xs text-on-surface-variant">{item.presentacion}</span>
-                        </div>
-                        <div className="bg-surface-container-highest p-1 rounded-lg">
-                          <span className="material-symbols-outlined text-on-surface-variant">icecream</span>
-                        </div>
+                      <div className="flex justify-between items-center mb-2">
+                        <h4 className="font-semibold text-xl text-primary flex items-center gap-2">
+                          {grupo.sabor}
+                        </h4>
+                        <button
+                          className="bg-surface-container-highest p-1.5 rounded-lg text-on-surface-variant hover:text-primary hover:bg-primary/10 transition-colors flex items-center justify-center"
+                          onClick={() => { setSelectedFlavorForVariant(grupo.sabor); setAddVariantModalOpen(true); }}
+                          title={`Añadir presentación a ${grupo.sabor}`}
+                        >
+                          <span className="material-symbols-outlined text-sm">add</span>
+                        </button>
                       </div>
 
-                      <div className="flex items-center gap-4 my-4">
-                        <div className="flex-1">
-                          <p className="text-[10px] text-on-surface-variant uppercase font-bold">Stock</p>
-                          <div className="text-5xl font-extrabold text-on-surface leading-none tabular-nums tracking-tighter">
-                            {item.stock}
+                      <div className="flex flex-col gap-3">
+                        {grupo.variantes.map((item) => (
+                          <div key={item.id} className="bg-surface-container-low border border-outline-variant rounded-lg p-3">
+                            <div className="flex justify-between items-center mb-2">
+                              <div>
+                                <span className="text-sm font-bold text-on-surface">{item.presentacion}</span>
+                                <span className="text-xs text-on-surface-variant ml-2">${Number(item.precio).toFixed(2)}</span>
+                              </div>
+                              <button 
+                                className="text-on-surface-variant hover:text-primary transition-colors p-1"
+                                onClick={() => { setFlavorToEdit(item); setEditFlavorModalOpen(true); }}
+                                title="Editar"
+                              >
+                                <span className="material-symbols-outlined text-sm">edit</span>
+                              </button>
+                            </div>
+
+                            <div className="flex items-center gap-4 mb-3">
+                              <div className="flex-1">
+                                <p className="text-[10px] text-on-surface-variant uppercase font-bold">Stock</p>
+                                <div className="text-3xl font-extrabold text-on-surface leading-none tabular-nums tracking-tighter">
+                                  {item.stock}
+                                </div>
+                              </div>
+                              <div className="flex gap-1">
+                                <button
+                                  className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-primary hover:text-on-primary transition-all active:scale-90 border border-outline-variant"
+                                  onClick={() => updateStock(item, 1)}
+                                >
+                                  <span className="material-symbols-outlined text-sm">add</span>
+                                </button>
+                                <button
+                                  className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-error hover:text-on-error transition-all active:scale-90 border border-outline-variant disabled:opacity-40"
+                                  onClick={() => updateStock(item, -1)}
+                                  disabled={item.stock === 0}
+                                >
+                                  <span className="material-symbols-outlined text-sm">remove</span>
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="flex justify-between items-center gap-3">
+                              <div className="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full transition-all duration-500 ${getStockColor(item.stock)}`}
+                                  style={{ width: getStockWidth(item.stock) }}
+                                />
+                              </div>
+                              <span className={`text-[10px] font-bold ${item.stock <= 10 ? 'text-error' : item.stock <= 30 ? 'text-tertiary' : 'text-primary'
+                                }`}>
+                                {item.stock <= 10 ? 'BAJO' : item.stock <= 30 ? 'MEDIO' : 'OK'}
+                              </span>
+                            </div>
                           </div>
-                          <p className="text-xs text-on-surface-variant mt-1">${Number(item.precio).toFixed(2)}</p>
-                        </div>
-                        <div className="flex flex-col gap-1">
-                          <button
-                            className="w-10 h-10 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-primary hover:text-on-primary transition-all active:scale-90 border border-outline-variant"
-                            onClick={() => updateStock(item, 1)}
-                          >
-                            <span className="material-symbols-outlined">add</span>
-                          </button>
-                          <button
-                            className="w-10 h-10 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-error hover:text-on-error transition-all active:scale-90 border border-outline-variant disabled:opacity-40"
-                            onClick={() => updateStock(item, -1)}
-                            disabled={item.stock === 0}
-                          >
-                            <span className="material-symbols-outlined">remove</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="pt-4 border-t border-outline-variant flex justify-between items-center gap-3">
-                        <div className="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-                          <div
-                            className={`h-full transition-all duration-500 ${getStockColor(item.stock)}`}
-                            style={{ width: getStockWidth(item.stock) }}
-                          />
-                        </div>
-                        <span className={`text-[10px] font-bold ${item.stock <= 10 ? 'text-error' : item.stock <= 30 ? 'text-tertiary' : 'text-primary'
-                          }`}>
-                          {item.stock <= 10 ? 'BAJO' : item.stock <= 30 ? 'MEDIO' : 'OK'}
-                        </span>
+                        ))}
                       </div>
                     </div>
                   ))}
@@ -406,8 +502,8 @@ export default function Administracion() {
                   <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
                       <tr className="bg-surface-container-high border-b border-outline-variant">
-                        {['Cliente', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
-                          <th key={h} className="px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest">
+                        {['Cliente', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
+                          <th key={h} className={`px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest whitespace-nowrap ${h === 'Comprobante' || h === 'Acciones' ? 'text-center' : 'text-left'}`}>
                             {h}
                           </th>
                         ))}
@@ -425,39 +521,42 @@ export default function Administracion() {
                                 {pedido.cliente_nombre?.slice(0, 2).toUpperCase() || '??'}
                               </div>
                               <div>
-                                <p className="text-sm font-medium text-on-surface">{pedido.cliente_nombre}</p>
+                                <p className="text-sm font-medium text-on-surface whitespace-nowrap">{pedido.cliente_nombre}</p>
                                 <p className="text-xs text-on-surface-variant">
                                   #{pedido.id.toString().slice(-8)}
                                 </p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-sm font-medium text-primary">
+                          <td className="px-6 py-4 text-sm text-on-surface-variant font-medium whitespace-nowrap">
+                            {pedido.numero_transaccion ? `#${pedido.numero_transaccion}` : '-'}
+                          </td>
+                          <td className="px-6 py-4 text-sm font-medium text-primary whitespace-nowrap">
                             ${Number(pedido.total).toFixed(2)}
                           </td>
-                          <td className="px-6 py-4 text-sm text-on-surface-variant">
+                          <td className="px-6 py-4 text-sm text-on-surface-variant whitespace-nowrap">
                             {formatDate(pedido.created_at)}
                           </td>
                           <td className="px-6 py-4">
-                            <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${getEstadoBadge(pedido.estado)}`}>
+                            <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${getEstadoBadge(pedido.estado)}`}>
                               {pedido.estado}
                             </span>
                           </td>
                           <td className="px-6 py-4 text-center">
                             {pedido.comprobante_url ? (
                               <button
-                                className="inline-flex items-center gap-1 px-3 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all"
+                                className="inline-flex items-center justify-center gap-1 px-3 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all whitespace-nowrap mx-auto"
                                 onClick={() => { setModalRecibo(pedido); setModalOpen(true); }}
                               >
                                 <span className="material-symbols-outlined text-sm">visibility</span>
                                 Ver
                               </button>
                             ) : (
-                              <span className="text-xs text-on-surface-variant italic">Sin archivo</span>
+                              <span className="text-xs text-on-surface-variant italic whitespace-nowrap block text-center">Sin archivo</span>
                             )}
                           </td>
                           <td className="px-6 py-4">
-                            <div className="flex justify-end gap-2">
+                            <div className="flex justify-center gap-2">
                               {pedido.estado !== 'Aprobado' && (
                                 <button
                                   className="px-3 py-1.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-medium hover:bg-green-500 hover:text-white transition-all active:scale-95"
@@ -647,6 +746,185 @@ export default function Administracion() {
                     <><span className="material-symbols-outlined animate-spin">sync</span> Guardando...</>
                   ) : (
                     'Guardar Sabor'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Modal: Añadir Presentación */}
+      {addVariantModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4"
+          onClick={() => setAddVariantModalOpen(false)}
+        >
+          <div
+            className="bg-surface-container border border-outline-variant rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-outline-variant flex justify-between items-center">
+              <div>
+                <h3 className="font-semibold text-xl text-on-surface">Añadir Presentación</h3>
+                <p className="text-xs text-on-surface-variant mt-1">Para el sabor: <strong className="text-primary">{selectedFlavorForVariant}</strong></p>
+              </div>
+              <button
+                className="text-on-surface-variant hover:text-primary transition-colors"
+                onClick={() => setAddVariantModalOpen(false)}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleAddVariant} className="p-6 space-y-4">
+              <div>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Presentación</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="Ej. Grande"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                  value={newVariant.presentacion}
+                  onChange={(e) => setNewVariant({ ...newVariant, presentacion: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-on-surface-variant block mb-1">Precio ($)</label>
+                  <input
+                    required
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="5.00"
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                    value={newVariant.precio}
+                    onChange={(e) => setNewVariant({ ...newVariant, precio: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-on-surface-variant block mb-1">Stock Inicial</label>
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    placeholder="10"
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                    value={newVariant.stock}
+                    onChange={(e) => setNewVariant({ ...newVariant, stock: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button
+                  type="button"
+                  className="flex-1 py-3 text-sm font-medium text-on-surface-variant border border-outline-variant rounded-lg hover:text-on-surface hover:bg-surface-container-highest transition-all"
+                  onClick={() => setAddVariantModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingFlavor}
+                  className="flex-1 py-3 bg-primary text-on-primary rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+                >
+                  {savingFlavor ? (
+                    <><span className="material-symbols-outlined animate-spin">sync</span> Guardando...</>
+                  ) : (
+                    'Guardar'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar Sabor */}
+      {editFlavorModalOpen && flavorToEdit && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4"
+          onClick={() => setEditFlavorModalOpen(false)}
+        >
+          <div
+            className="bg-surface-container border border-outline-variant rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-outline-variant flex justify-between items-center">
+              <h3 className="font-semibold text-xl text-on-surface">Editar Sabor</h3>
+              <button
+                className="text-on-surface-variant hover:text-primary transition-colors"
+                onClick={() => setEditFlavorModalOpen(false)}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleEditFlavor} className="p-6 space-y-4">
+              <div>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Nombre del Sabor</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="Ej. Fresa"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                  value={flavorToEdit.sabor}
+                  onChange={(e) => setFlavorToEdit({ ...flavorToEdit, sabor: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Presentación</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="Ej. Pequeño"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                  value={flavorToEdit.presentacion}
+                  onChange={(e) => setFlavorToEdit({ ...flavorToEdit, presentacion: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-on-surface-variant block mb-1">Precio ($)</label>
+                  <input
+                    required
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="2.50"
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                    value={flavorToEdit.precio}
+                    onChange={(e) => setFlavorToEdit({ ...flavorToEdit, precio: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-on-surface-variant block mb-1">Stock Actual</label>
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    placeholder="100"
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                    value={flavorToEdit.stock}
+                    onChange={(e) => setFlavorToEdit({ ...flavorToEdit, stock: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button
+                  type="button"
+                  className="flex-1 py-3 text-sm font-medium text-on-surface-variant border border-outline-variant rounded-lg hover:text-on-surface hover:bg-surface-container-highest transition-all"
+                  onClick={() => setEditFlavorModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingFlavor}
+                  className="flex-1 py-3 bg-primary text-on-primary rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+                >
+                  {savingFlavor ? (
+                    <><span className="material-symbols-outlined animate-spin">sync</span> Guardando...</>
+                  ) : (
+                    'Guardar Cambios'
                   )}
                 </button>
               </div>
