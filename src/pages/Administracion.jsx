@@ -22,8 +22,10 @@ export default function Administracion() {
   // ── Datos ─────────────────────────────────────────────────────────
   const [inventario, setInventario] = useState([]);
   const [pedidos, setPedidos] = useState([]);
+  const [historial, setHistorial] = useState([]);
   const [loadingInv, setLoadingInv] = useState(true);
   const [loadingPed, setLoadingPed] = useState(true);
+  const [loadingHist, setLoadingHist] = useState(true);
   const [error, setError] = useState(null);
 
   // ── GET: inventario ──────────────────────────────────────────────
@@ -66,6 +68,26 @@ export default function Administracion() {
     fetchPedidos();
   }, []);
 
+  // ── GET: historial de pedidos ────────────────────────────────────
+  useEffect(() => {
+    async function fetchHistorial() {
+      setLoadingHist(true);
+      const { data, error } = await supabase
+        .from('pedidos')
+        .select('id, cliente_nombre, cedula, telefono, tipo_entrega, direccion_envio, total, estado, comprobante_url, created_at, numero_transaccion')
+        .in('estado', ['Aprobado', 'Rechazado'])
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error cargando historial:', error.message);
+      } else {
+        setHistorial(data || []);
+      }
+      setLoadingHist(false);
+    }
+    fetchHistorial();
+  }, []);
+
   // ── UPDATE: stock de inventario (+/-) ────────────────────────────
   const updateStock = async (producto, delta) => {
     const nuevoStock = Math.max(0, producto.stock + delta);
@@ -98,12 +120,12 @@ export default function Administracion() {
     }
   };
 
-  // ── UPDATE: cambiar estado de un pedido ──────────────────────────
+  // ── UPDATE: cambiar estado de un pedido y descontar stock si es Aprobado ────────
   const cambiarEstadoPedido = async (pedidoId, nuevoEstado) => {
+    const pedidoTarget = pedidos.find(p => p.id === pedidoId);
+    
     // Actualización optimista
-    setPedidos((prev) =>
-      prev.map((p) => (p.id === pedidoId ? { ...p, estado: nuevoEstado } : p))
-    );
+    setPedidos((prev) => prev.map((p) => (p.id === pedidoId ? { ...p, estado: nuevoEstado } : p)));
 
     const { error } = await supabase
       .from('pedidos')
@@ -113,12 +135,36 @@ export default function Administracion() {
     if (error) {
       console.error('Error actualizando pedido:', error.message);
       setError(`No se pudo actualizar el pedido: ${error.message}`);
-      // No revertimos el estado para no confundir — recarga de página lo arregla
     } else {
-      // Quitar de la cola si fue Aprobado o Rechazado
-      if (nuevoEstado === 'Aprobado' || nuevoEstado === 'Rechazado') {
+      // Si el pedido es Rechazado, DEVOLVEMOS el stock al inventario (porque ya se descontó al crearlo)
+      if (nuevoEstado === 'Rechazado') {
+        const { data: detalles } = await supabase
+          .from('detalles_pedido')
+          .select('producto_id, cantidad')
+          .eq('pedido_id', pedidoId);
+
+        if (detalles) {
+          for (const det of detalles) {
+            const { data: itemDb } = await supabase
+              .from('inventario')
+              .select('stock')
+              .eq('id', det.producto_id)
+              .single();
+
+            if (itemDb) {
+              const newStock = itemDb.stock + det.cantidad;
+              await supabase.from('inventario').update({ stock: newStock }).eq('id', det.producto_id);
+              setInventario(prev => prev.map(p => p.id === det.producto_id ? { ...p, stock: newStock } : p));
+            }
+          }
+        }
+      }
+
+      // Quitar de la cola y mover al historial
+      if ((nuevoEstado === 'Aprobado' || nuevoEstado === 'Rechazado') && pedidoTarget) {
         setTimeout(() => {
           setPedidos((prev) => prev.filter((p) => p.id !== pedidoId));
+          setHistorial((prev) => [{ ...pedidoTarget, estado: nuevoEstado }, ...prev]);
         }, 600);
       }
     }
@@ -206,6 +252,27 @@ export default function Administracion() {
     setSavingFlavor(false);
   };
 
+  // ── DELETE: eliminar sabor/presentación ───────────────────────────
+  const handleDeleteFlavor = async (id) => {
+    if (!window.confirm('¿Estás seguro de que deseas eliminar este sabor/presentación del inventario? Esta acción no se puede deshacer.')) return;
+    
+    const { error } = await supabase
+      .from('inventario')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error eliminando sabor:', error.message);
+      if (error.message.includes('foreign key constraint') || error.code === '23503') {
+        setError('No puedes eliminar este sabor porque ya está vinculado a pedidos anteriores. Si ya no lo vendes, te sugiero poner su Stock en 0 y cambiarle el nombre a "Inactivo".');
+      } else {
+        setError(`No se pudo eliminar: ${error.message}`);
+      }
+    } else {
+      setInventario((prev) => prev.filter(p => p.id !== id));
+    }
+  };
+
   const getInventarioAgrupado = () => {
     const term = searchQuery.toLowerCase().trim();
     const filtered = term ? inventario.filter(item => 
@@ -226,10 +293,10 @@ export default function Administracion() {
     return Object.values(agrupado).sort((a, b) => a.sabor.localeCompare(b.sabor));
   };
 
-  const getPedidosFiltrados = () => {
+  const getPedidosFiltrados = (lista) => {
     const term = searchQuery.toLowerCase().trim();
-    if (!term) return pedidos;
-    return pedidos.filter(p => 
+    if (!term) return lista;
+    return lista.filter(p => 
       p.cliente_nombre?.toLowerCase().includes(term) ||
       p.cedula?.toLowerCase().includes(term) ||
       p.tipo_entrega?.toLowerCase().includes(term) ||
@@ -293,6 +360,7 @@ export default function Administracion() {
             { icon: 'dashboard', label: 'Inicio', id: 'Dashboard' },
             { icon: 'inventory_2', label: 'Inventario', id: 'Inventory' },
             { icon: 'verified_user', label: 'Verificación', id: 'Verification' },
+            { icon: 'history', label: 'Historial', id: 'History' },
             { icon: 'settings', label: 'Configuración', id: 'Settings' },
           ].map((item) => {
             const isActive = activeTab === item.id;
@@ -442,13 +510,22 @@ export default function Administracion() {
                                 <span className="text-sm font-bold text-on-surface">{item.presentacion}</span>
                                 <span className="text-xs text-on-surface-variant ml-2">${Number(item.precio).toFixed(2)}</span>
                               </div>
-                              <button 
-                                className="text-on-surface-variant hover:text-primary transition-colors p-1"
-                                onClick={() => { setFlavorToEdit(item); setEditFlavorModalOpen(true); }}
-                                title="Editar"
-                              >
-                                <span className="material-symbols-outlined text-sm">edit</span>
-                              </button>
+                              <div className="flex gap-1">
+                                <button 
+                                  className="text-on-surface-variant hover:text-primary transition-colors p-1 rounded hover:bg-primary/10"
+                                  onClick={() => { setFlavorToEdit(item); setEditFlavorModalOpen(true); }}
+                                  title="Editar"
+                                >
+                                  <span className="material-symbols-outlined text-sm block">edit</span>
+                                </button>
+                                <button 
+                                  className="text-on-surface-variant hover:text-error transition-colors p-1 rounded hover:bg-error/10"
+                                  onClick={() => handleDeleteFlavor(item.id)}
+                                  title="Eliminar"
+                                >
+                                  <span className="material-symbols-outlined text-sm block">delete</span>
+                                </button>
+                              </div>
                             </div>
 
                             <div className="flex items-center gap-4 mb-3">
@@ -531,7 +608,7 @@ export default function Administracion() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant">
-                      {getPedidosFiltrados().map((pedido) => (
+                      {getPedidosFiltrados(pedidos).map((pedido) => (
                         <tr
                           key={pedido.id}
                           className="hover:bg-surface-container-highest transition-colors group"
@@ -611,6 +688,105 @@ export default function Administracion() {
                                 </button>
                               )}
                             </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ── Sección 3: Historial de Pedidos ────────────────────────── */}
+          {(activeTab === 'Dashboard' || activeTab === 'History') && (
+            <section id="history">
+              <div className="mb-6 mt-12">
+                <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Historial de Pedidos</h3>
+                <p className="text-on-surface-variant text-sm font-medium">
+                  Registro de todos los pedidos aprobados y rechazados
+                </p>
+              </div>
+
+              {loadingHist ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map((n) => (
+                    <div key={n} className="h-16 bg-surface-container rounded-xl animate-pulse border border-outline-variant" />
+                  ))}
+                </div>
+              ) : historial.length === 0 ? (
+                <div className="text-center py-12 bg-surface-container rounded-xl border border-outline-variant">
+                  <span className="material-symbols-outlined text-5xl text-on-surface-variant block mb-3">history</span>
+                  <p className="text-on-surface-variant text-sm">No hay registros en el historial.</p>
+                </div>
+              ) : (
+                <div className="bg-surface-container border border-outline-variant rounded-xl overflow-hidden overflow-x-auto">
+                  <table className="w-full text-left border-collapse min-w-[700px]">
+                    <thead>
+                      <tr className="bg-surface-container-high border-b border-outline-variant">
+                        {['Cliente', 'Entrega', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante'].map((h) => (
+                          <th key={h} className={`px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest whitespace-nowrap ${h === 'Comprobante' ? 'text-center' : 'text-left'}`}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant">
+                      {getPedidosFiltrados(historial).map((pedido) => (
+                        <tr
+                          key={pedido.id}
+                          className="hover:bg-surface-container-highest transition-colors group opacity-80"
+                        >
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
+                                {pedido.cliente_nombre?.slice(0, 2).toUpperCase() || '??'}
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-on-surface whitespace-nowrap">
+                                  {pedido.cliente_nombre}
+                                  <span className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded ml-2">#{pedido.id}</span>
+                                </p>
+                                <p className="text-xs text-on-surface-variant">
+                                  {pedido.cedula} | {pedido.telefono}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="text-sm font-medium text-on-surface whitespace-nowrap flex items-center gap-1.5">
+                              {pedido.tipo_entrega === 'AutoServicio' && <span className="text-xs">🟢</span>}
+                              {pedido.tipo_entrega === 'Pick-up' && <span className="text-xs">🔵</span>}
+                              {pedido.tipo_entrega === 'Delivery' && <span className="text-xs">🟠</span>}
+                              {pedido.tipo_entrega || '-'}
+                            </p>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-on-surface-variant font-medium whitespace-nowrap">
+                            {pedido.numero_transaccion ? `#${pedido.numero_transaccion}` : '-'}
+                          </td>
+                          <td className="px-6 py-4 text-sm font-medium text-primary whitespace-nowrap">
+                            ${Number(pedido.total).toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-on-surface-variant whitespace-nowrap">
+                            {formatDate(pedido.created_at)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${getEstadoBadge(pedido.estado)}`}>
+                              {pedido.estado}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {pedido.comprobante_url ? (
+                              <button
+                                className="inline-flex items-center justify-center gap-1 px-3 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all whitespace-nowrap mx-auto"
+                                onClick={() => { setModalRecibo(pedido); setModalOpen(true); }}
+                              >
+                                <span className="material-symbols-outlined text-sm">visibility</span>
+                                Ver
+                              </button>
+                            ) : (
+                              <span className="text-xs text-on-surface-variant italic whitespace-nowrap block text-center">-</span>
+                            )}
                           </td>
                         </tr>
                       ))}

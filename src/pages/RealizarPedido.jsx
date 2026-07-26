@@ -211,6 +211,20 @@ export default function RealizarPedido() {
 
       if (detalleError) throw detalleError;
 
+      // 3. Descontar del inventario inmediatamente
+      for (const item of cart) {
+        const { data: itemDb } = await supabase
+          .from('inventario')
+          .select('stock')
+          .eq('id', item.id)
+          .single();
+
+        if (itemDb) {
+          const newStock = Math.max(0, itemDb.stock - item.cantidad);
+          await supabase.from('inventario').update({ stock: newStock }).eq('id', item.id);
+        }
+      }
+
       // ¡Éxito! — Notificar por Telegram
       const msg = buildNuevoPedidoMsg({
         cliente_nombre: clientName.trim(),
