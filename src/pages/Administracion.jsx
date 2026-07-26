@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 export default function Administracion() {
   const navigate = useNavigate();
   // ── UI state ─────────────────────────────────────────────────────
+  const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [modalOpen, setModalOpen] = useState(false);
@@ -206,7 +207,13 @@ export default function Administracion() {
   };
 
   const getInventarioAgrupado = () => {
-    const agrupado = inventario.reduce((acc, item) => {
+    const term = searchQuery.toLowerCase().trim();
+    const filtered = term ? inventario.filter(item => 
+      item.sabor.toLowerCase().includes(term) || 
+      item.presentacion.toLowerCase().includes(term)
+    ) : inventario;
+
+    const agrupado = filtered.reduce((acc, item) => {
       if (!acc[item.sabor]) {
         acc[item.sabor] = {
           sabor: item.sabor,
@@ -217,6 +224,18 @@ export default function Administracion() {
       return acc;
     }, {});
     return Object.values(agrupado).sort((a, b) => a.sabor.localeCompare(b.sabor));
+  };
+
+  const getPedidosFiltrados = () => {
+    const term = searchQuery.toLowerCase().trim();
+    if (!term) return pedidos;
+    return pedidos.filter(p => 
+      p.cliente_nombre?.toLowerCase().includes(term) ||
+      p.cedula?.toLowerCase().includes(term) ||
+      p.tipo_entrega?.toLowerCase().includes(term) ||
+      p.numero_transaccion?.toLowerCase().includes(term) ||
+      p.estado?.toLowerCase().includes(term)
+    );
   };
 
   // ── Helpers UI ───────────────────────────────────────────────────
@@ -339,6 +358,8 @@ export default function Administracion() {
                 className="bg-transparent border-none focus:outline-none text-sm text-on-surface w-48"
                 placeholder="Buscar pedido o sabor..."
                 type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
             <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
@@ -510,7 +531,7 @@ export default function Administracion() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant">
-                      {pedidos.map((pedido) => (
+                      {getPedidosFiltrados().map((pedido) => (
                         <tr
                           key={pedido.id}
                           className="hover:bg-surface-container-highest transition-colors group"
@@ -521,7 +542,10 @@ export default function Administracion() {
                                 {pedido.cliente_nombre?.slice(0, 2).toUpperCase() || '??'}
                               </div>
                               <div>
-                                <p className="text-sm font-medium text-on-surface whitespace-nowrap">{pedido.cliente_nombre}</p>
+                                <p className="text-sm font-medium text-on-surface whitespace-nowrap">
+                                  {pedido.cliente_nombre}
+                                  <span className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded ml-2">#{pedido.id}</span>
+                                </p>
                                 <p className="text-xs text-on-surface-variant">
                                   {pedido.cedula} | {pedido.telefono}
                                 </p>
@@ -529,7 +553,10 @@ export default function Administracion() {
                             </div>
                           </td>
                           <td className="px-6 py-4">
-                            <p className="text-sm font-medium text-on-surface whitespace-nowrap">
+                            <p className="text-sm font-medium text-on-surface whitespace-nowrap flex items-center gap-1.5">
+                              {pedido.tipo_entrega === 'AutoServicio' && <span className="text-xs">🟢</span>}
+                              {pedido.tipo_entrega === 'Pick-up' && <span className="text-xs">🔵</span>}
+                              {pedido.tipo_entrega === 'Delivery' && <span className="text-xs">🟠</span>}
                               {pedido.tipo_entrega || '-'}
                             </p>
                             {pedido.tipo_entrega === 'Delivery' && pedido.direccion_envio && (
@@ -702,11 +729,11 @@ export default function Administracion() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-on-surface-variant block mb-1">Presentación</label>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Tamaño (Oz)</label>
                 <input
                   required
                   type="text"
-                  placeholder="Ej. Pequeño"
+                  placeholder="Ej. 7 oz"
                   className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
                   value={newFlavor.presentacion}
                   onChange={(e) => setNewFlavor({ ...newFlavor, presentacion: e.target.value })}
@@ -787,11 +814,11 @@ export default function Administracion() {
             </div>
             <form onSubmit={handleAddVariant} className="p-6 space-y-4">
               <div>
-                <label className="text-sm font-medium text-on-surface-variant block mb-1">Presentación</label>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Tamaño (Oz)</label>
                 <input
                   required
                   type="text"
-                  placeholder="Ej. Grande"
+                  placeholder="Ej. 12 oz"
                   className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
                   value={newVariant.presentacion}
                   onChange={(e) => setNewVariant({ ...newVariant, presentacion: e.target.value })}
@@ -881,11 +908,11 @@ export default function Administracion() {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-on-surface-variant block mb-1">Presentación</label>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Tamaño (Oz)</label>
                 <input
                   required
                   type="text"
-                  placeholder="Ej. Pequeño"
+                  placeholder="Ej. 7 oz"
                   className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
                   value={flavorToEdit.presentacion}
                   onChange={(e) => setFlavorToEdit({ ...flavorToEdit, presentacion: e.target.value })}

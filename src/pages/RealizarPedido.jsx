@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { sendTelegramMessage, buildNuevoPedidoMsg } from '../telegramBot';
 
 // Emojis por sabor para que sea más visual y representativo
 const FLAVOR_META = {
@@ -46,6 +47,7 @@ export default function RealizarPedido() {
 
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
+  const [lastOrderId, setLastOrderId] = useState(null);
   const [error, setError] = useState(null);
   
   // BCV Rate
@@ -209,7 +211,18 @@ export default function RealizarPedido() {
 
       if (detalleError) throw detalleError;
 
-      // ¡Éxito!
+      // ¡Éxito! — Notificar por Telegram
+      const msg = buildNuevoPedidoMsg({
+        cliente_nombre: clientName.trim(),
+        cedula: cedula.trim(),
+        telefono: telefono.trim(),
+        tipo_entrega: tipoEntrega,
+        direccion_envio: direccionEnvio.trim(),
+        total: cartTotal,
+      });
+      sendTelegramMessage(msg); // fire-and-forget
+
+      setLastOrderId(pedidoData.id);
       setDone(true);
       setClientName('');
       setCedula('');
@@ -220,7 +233,8 @@ export default function RealizarPedido() {
       setTimeout(() => {
         setDone(false);
         setSubmitting(false);
-      }, 2500);
+        setLastOrderId(null);
+      }, 4000);
     } catch (err) {
       console.error('Error al realizar el pedido:', err.message);
       setError(`No se pudo procesar el pedido: ${err.message}`);
@@ -455,7 +469,7 @@ export default function RealizarPedido() {
           {currentProduct && presentacionesFiltradas.length > 0 && (
             <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
               <label className="text-sm font-medium text-on-surface-variant block ml-1">
-                Presentación
+                Tamaño (Oz)
               </label>
               <div className="flex gap-2 flex-wrap">
                 {presentacionesFiltradas.map((item) => {
@@ -595,7 +609,7 @@ export default function RealizarPedido() {
           {done && (
             <>
               <span className="material-symbols-outlined">check_circle</span>
-              ¡Pedido enviado!
+              ¡Orden #{lastOrderId} enviada!
             </>
           )}
           {!submitting && !done && (

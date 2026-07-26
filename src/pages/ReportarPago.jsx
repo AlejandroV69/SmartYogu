@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
+import { sendTelegramMessage, buildComprobantePagadoMsg } from '../telegramBot';
 
 const BUCKET_NAME = 'comprobantes';
 
@@ -28,7 +29,7 @@ export default function ReportarPago() {
       setLoading(true);
       const { data, error } = await supabase
         .from('pedidos')
-        .select('id, cliente_nombre, cedula, total, estado, created_at')
+        .select('id, cliente_nombre, cedula, telefono, tipo_entrega, direccion_envio, total, estado, created_at')
         .eq('estado', 'Pendiente por Pago')
         .order('created_at', { ascending: false });
 
@@ -129,6 +130,18 @@ export default function ReportarPago() {
         .eq('id', selectedOrder.id);
 
       if (updateError) throw updateError;
+
+      // 3. Notificar por Telegram
+      const msg = buildComprobantePagadoMsg({
+        cliente_nombre: selectedOrder.cliente_nombre,
+        cedula: selectedOrder.cedula,
+        telefono: selectedOrder.telefono,
+        tipo_entrega: selectedOrder.tipo_entrega,
+        direccion_envio: selectedOrder.direccion_envio,
+        numero_transaccion: numeroTransaccion.trim(),
+        total: selectedOrder.total,
+      });
+      sendTelegramMessage(msg); // fire-and-forget
 
       // Éxito: quitar el pedido de la lista local
       setPedidos((prev) => prev.filter((p) => p.id !== selectedOrder.id));
