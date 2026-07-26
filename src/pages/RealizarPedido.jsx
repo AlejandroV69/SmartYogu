@@ -35,7 +35,7 @@ export default function RealizarPedido() {
   const [clientName, setClientName] = useState('');
   const [cedula, setCedula] = useState('');
   const [telefono, setTelefono] = useState('');
-  const [tipoEntrega, setTipoEntrega] = useState('Pick-up');
+  const [tipoEntrega, setTipoEntrega] = useState('');
   const [direccionEnvio, setDireccionEnvio] = useState('');
 
   // Selección temporal (en proceso de añadir al carrito)
@@ -166,6 +166,10 @@ export default function RealizarPedido() {
       setError('Por favor completa todos tus datos personales.');
       return;
     }
+    if (!tipoEntrega) {
+      setError('Por favor selecciona una modalidad de entrega.');
+      return;
+    }
     if (tipoEntrega === 'Delivery' && !direccionEnvio.trim()) {
       setError('Por favor indica tu dirección de envío para el delivery.');
       return;
@@ -242,7 +246,7 @@ export default function RealizarPedido() {
       setCedula('');
       setTelefono('');
       setDireccionEnvio('');
-      setTipoEntrega('Pick-up');
+      setTipoEntrega('');
       setCart([]);
       setTimeout(() => {
         setDone(false);
