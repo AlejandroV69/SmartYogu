@@ -28,7 +28,7 @@ export default function ReportarPago() {
       setLoading(true);
       const { data, error } = await supabase
         .from('pedidos')
-        .select('id, cliente_nombre, total, estado, created_at')
+        .select('id, cliente_nombre, cedula, total, estado, created_at')
         .eq('estado', 'Pendiente por Pago')
         .order('created_at', { ascending: false });
 
@@ -227,7 +227,7 @@ export default function ReportarPago() {
           </span>
           <input
             type="text"
-            placeholder="Buscar por nombre o apellido..."
+            placeholder="Buscar por número de cédula..."
             className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl pl-12 pr-4 py-3 focus:border-primary focus:outline-none text-on-surface transition-colors"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -258,7 +258,7 @@ export default function ReportarPago() {
             <span className="material-symbols-outlined text-5xl text-on-surface-variant block mb-3">
               search
             </span>
-            <p className="text-on-surface-variant text-sm">Ingresa tu nombre y apellido para buscar tus pedidos pendientes.</p>
+            <p className="text-on-surface-variant text-sm">Ingresa tu número de cédula para buscar tus pedidos pendientes.</p>
           </div>
         ) : loading ? (
           <div className="space-y-4">
@@ -266,17 +266,17 @@ export default function ReportarPago() {
               <div key={n} className="h-24 bg-surface-container-low rounded-xl animate-pulse border border-outline-variant" />
             ))}
           </div>
-        ) : pedidos.filter(p => p.cliente_nombre?.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && !done ? (
+        ) : pedidos.filter(p => p.cedula?.toLowerCase().includes(searchQuery.trim().toLowerCase())).length === 0 && !done ? (
           <div className="text-center py-16">
             <span className="material-symbols-outlined text-5xl text-on-surface-variant block mb-3">
               task_alt
             </span>
-            <p className="text-on-surface-variant text-sm">No tienes pedidos pendientes por pagar.</p>
+            <p className="text-on-surface-variant text-sm">No tienes pedidos pendientes por pagar asociados a esta cédula.</p>
           </div>
         ) : (
           <div className="space-y-4 mb-6">
             {pedidos
-              .filter(p => p.cliente_nombre?.toLowerCase().includes(searchQuery.toLowerCase()))
+              .filter(p => p.cedula?.toLowerCase().includes(searchQuery.trim().toLowerCase()))
               .map((order) => (
                 <div
                   key={order.id}

@@ -51,7 +51,7 @@ export default function Administracion() {
       setLoadingPed(true);
       const { data, error } = await supabase
         .from('pedidos')
-        .select('id, cliente_nombre, total, estado, comprobante_url, created_at, numero_transaccion')
+        .select('id, cliente_nombre, cedula, telefono, tipo_entrega, direccion_envio, total, estado, comprobante_url, created_at, numero_transaccion')
         .in('estado', ['Pago por Verificar', 'Pendiente por Pago'])
         .order('created_at', { ascending: false });
 
@@ -502,7 +502,7 @@ export default function Administracion() {
                   <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
                       <tr className="bg-surface-container-high border-b border-outline-variant">
-                        {['Cliente', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
+                        {['Cliente', 'Entrega', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
                           <th key={h} className={`px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest whitespace-nowrap ${h === 'Comprobante' || h === 'Acciones' ? 'text-center' : 'text-left'}`}>
                             {h}
                           </th>
@@ -523,10 +523,20 @@ export default function Administracion() {
                               <div>
                                 <p className="text-sm font-medium text-on-surface whitespace-nowrap">{pedido.cliente_nombre}</p>
                                 <p className="text-xs text-on-surface-variant">
-                                  #{pedido.id.toString().slice(-8)}
+                                  {pedido.cedula} | {pedido.telefono}
                                 </p>
                               </div>
                             </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="text-sm font-medium text-on-surface whitespace-nowrap">
+                              {pedido.tipo_entrega || '-'}
+                            </p>
+                            {pedido.tipo_entrega === 'Delivery' && pedido.direccion_envio && (
+                              <p className="text-xs text-on-surface-variant max-w-[200px] truncate" title={pedido.direccion_envio}>
+                                {pedido.direccion_envio}
+                              </p>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-sm text-on-surface-variant font-medium whitespace-nowrap">
                             {pedido.numero_transaccion ? `#${pedido.numero_transaccion}` : '-'}

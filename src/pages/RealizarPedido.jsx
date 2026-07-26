@@ -32,6 +32,10 @@ export default function RealizarPedido() {
   // ── Estado de la UI ──────────────────────────────────────────────
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [clientName, setClientName] = useState('');
+  const [cedula, setCedula] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [tipoEntrega, setTipoEntrega] = useState('Pick-up');
+  const [direccionEnvio, setDireccionEnvio] = useState('');
 
   // Selección temporal (en proceso de añadir al carrito)
   const [currentProduct, setCurrentProduct] = useState(null);
@@ -156,8 +160,12 @@ export default function RealizarPedido() {
     e.preventDefault();
     setError(null);
 
-    if (!clientName.trim()) {
-      setError('Por favor ingresa tu nombre antes de continuar.');
+    if (!clientName.trim() || !cedula.trim() || !telefono.trim()) {
+      setError('Por favor completa todos tus datos personales.');
+      return;
+    }
+    if (tipoEntrega === 'Delivery' && !direccionEnvio.trim()) {
+      setError('Por favor indica tu dirección de envío para el delivery.');
       return;
     }
     if (cart.length === 0) {
@@ -173,6 +181,10 @@ export default function RealizarPedido() {
         .from('pedidos')
         .insert({
           cliente_nombre: clientName.trim(),
+          cedula: cedula.trim(),
+          telefono: telefono.trim(),
+          tipo_entrega: tipoEntrega,
+          direccion_envio: tipoEntrega === 'Delivery' ? direccionEnvio.trim() : null,
           total: cartTotal,
           estado: 'Pendiente por Pago',
         })
@@ -200,6 +212,10 @@ export default function RealizarPedido() {
       // ¡Éxito!
       setDone(true);
       setClientName('');
+      setCedula('');
+      setTelefono('');
+      setDireccionEnvio('');
+      setTipoEntrega('Pick-up');
       setCart([]);
       setTimeout(() => {
         setDone(false);
@@ -306,20 +322,96 @@ export default function RealizarPedido() {
 
         {/* Formulario de cliente y selección */}
         <div className="space-y-8">
-          {/* Customer Name */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium text-on-surface-variant block ml-1">
-              Nombre del Cliente
-            </label>
-            <input
-              className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl px-4 py-4 focus:border-primary focus:outline-none transition-all text-on-surface placeholder:text-on-surface-variant/50 text-base"
-              placeholder="¿A quién saludamos hoy?"
-              type="text"
-              value={clientName}
-              onChange={(e) => setClientName(e.target.value)}
-              required
-              form="orderForm"
-            />
+          {/* Datos del Cliente */}
+          <div className="space-y-4">
+            <h3 className="font-bold text-lg text-on-surface">Datos del Cliente</h3>
+            
+            <div className="space-y-3">
+              <label className="text-sm font-medium text-on-surface-variant block ml-1">
+                Nombre y Apellido
+              </label>
+              <input
+                className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl px-4 py-3 focus:border-primary focus:outline-none transition-all text-on-surface placeholder:text-on-surface-variant/50"
+                placeholder="Ej. Juan Pérez"
+                type="text"
+                value={clientName}
+                onChange={(e) => setClientName(e.target.value)}
+                required
+                form="orderForm"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-on-surface-variant block ml-1">
+                  Cédula
+                </label>
+                <input
+                  className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl px-4 py-3 focus:border-primary focus:outline-none transition-all text-on-surface placeholder:text-on-surface-variant/50"
+                  placeholder="Ej. V-12345678"
+                  type="text"
+                  value={cedula}
+                  onChange={(e) => setCedula(e.target.value)}
+                  required
+                  form="orderForm"
+                />
+              </div>
+
+              <div className="space-y-3">
+                <label className="text-sm font-medium text-on-surface-variant block ml-1">
+                  Teléfono
+                </label>
+                <input
+                  className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl px-4 py-3 focus:border-primary focus:outline-none transition-all text-on-surface placeholder:text-on-surface-variant/50"
+                  placeholder="Ej. 0414-1234567"
+                  type="text"
+                  value={telefono}
+                  onChange={(e) => setTelefono(e.target.value)}
+                  required
+                  form="orderForm"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Tipo de Entrega */}
+          <div className="space-y-4">
+            <h3 className="font-bold text-lg text-on-surface">Tipo de Entrega</h3>
+            <div className="grid grid-cols-3 gap-2">
+              {['AutoServicio', 'Pick-up', 'Delivery'].map(tipo => (
+                <button
+                  key={tipo}
+                  type="button"
+                  onClick={() => setTipoEntrega(tipo)}
+                  className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                    tipoEntrega === tipo
+                      ? 'bg-primary text-on-primary border-primary shadow-md scale-105'
+                      : 'bg-surface-container border-outline-variant text-on-surface-variant hover:bg-surface-container-highest'
+                  }`}
+                >
+                  <span className="material-symbols-outlined">
+                    {tipo === 'AutoServicio' ? 'directions_car' : tipo === 'Pick-up' ? 'storefront' : 'moped'}
+                  </span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider">{tipo}</span>
+                </button>
+              ))}
+            </div>
+
+            {tipoEntrega === 'Delivery' && (
+              <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                <label className="text-sm font-medium text-on-surface-variant block ml-1">
+                  Dirección de Envío
+                </label>
+                <textarea
+                  className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl px-4 py-3 focus:border-primary focus:outline-none transition-all text-on-surface placeholder:text-on-surface-variant/50 resize-none h-24"
+                  placeholder="Ej. Urb. Las Lomas, Calle 4, Casa #12. Punto de referencia: Al lado de la panadería."
+                  value={direccionEnvio}
+                  onChange={(e) => setDireccionEnvio(e.target.value)}
+                  required={tipoEntrega === 'Delivery'}
+                  form="orderForm"
+                />
+              </div>
+            )}
           </div>
 
           {/* Flavor Selection */}
