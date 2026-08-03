@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import RealizarPedido from './pages/RealizarPedido';
 import Administracion from './pages/Administracion';
 import ReportarPago from './pages/ReportarPago';
 import Login from './pages/Login';
@@ -47,8 +46,8 @@ function App() {
   return (
     <>
       <Routes>
-        <Route path="/" element={<RealizarPedido />} />
-        <Route path="/pago" element={<ReportarPago />} />
+        <Route path="/" element={<ReportarPago />} />
+        <Route path="/pago" element={<Navigate to="/" replace />} />
         <Route path="/login" element={<Login />} />
         <Route
           path="/admin"

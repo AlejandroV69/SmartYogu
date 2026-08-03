@@ -10,6 +10,7 @@ export default function Administracion() {
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalRecibo, setModalRecibo] = useState(null); // pedido seleccionado para ver recibo
+  const [signedImageUrl, setSignedImageUrl] = useState(null); // URL firmada de la imagen
   const [addFlavorModalOpen, setAddFlavorModalOpen] = useState(false);
   const [editFlavorModalOpen, setEditFlavorModalOpen] = useState(false);
   const [addVariantModalOpen, setAddVariantModalOpen] = useState(false);
@@ -303,6 +304,28 @@ export default function Administracion() {
       p.numero_transaccion?.toLowerCase().includes(term) ||
       p.estado?.toLowerCase().includes(term)
     );
+  };
+
+  const handleOpenRecibo = async (pedido) => {
+    setModalRecibo(pedido);
+    setSignedImageUrl(null);
+    setModalOpen(true);
+    
+    if (pedido.comprobante_url) {
+      // Extract file path from full URL or use as is if it's just the file name
+      let filePath = pedido.comprobante_url;
+      if (filePath.includes('/storage/v1/object/public/comprobantes/')) {
+        filePath = filePath.split('/storage/v1/object/public/comprobantes/')[1];
+      }
+      
+      const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(filePath, 60 * 60); // 1 hour valid
+      if (!error && data) {
+        setSignedImageUrl(data.signedUrl);
+      } else {
+        // Fallback to original URL
+        setSignedImageUrl(pedido.comprobante_url);
+      }
+    }
   };
 
   // ── Helpers UI ───────────────────────────────────────────────────
@@ -660,7 +683,7 @@ export default function Administracion() {
                             {pedido.comprobante_url ? (
                               <button
                                 className="inline-flex items-center justify-center gap-1 px-3 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all whitespace-nowrap mx-auto"
-                                onClick={() => { setModalRecibo(pedido); setModalOpen(true); }}
+                                onClick={() => handleOpenRecibo(pedido)}
                               >
                                 <span className="material-symbols-outlined text-sm">visibility</span>
                                 Ver
@@ -779,7 +802,7 @@ export default function Administracion() {
                             {pedido.comprobante_url ? (
                               <button
                                 className="inline-flex items-center justify-center gap-1 px-3 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all whitespace-nowrap mx-auto"
-                                onClick={() => { setModalRecibo(pedido); setModalOpen(true); }}
+                                onClick={() => handleOpenRecibo(pedido)}
                               >
                                 <span className="material-symbols-outlined text-sm">visibility</span>
                                 Ver
@@ -836,7 +859,7 @@ export default function Administracion() {
             <div className="p-6 bg-surface-container-lowest">
               {modalRecibo.comprobante_url ? (
                 <img
-                  src={modalRecibo.comprobante_url}
+                  src={signedImageUrl || modalRecibo.comprobante_url}
                   alt="Comprobante de pago"
                   className="w-full max-h-[60vh] object-contain rounded-lg border border-outline-variant"
                 />
