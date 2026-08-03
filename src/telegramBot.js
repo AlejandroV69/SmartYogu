@@ -32,6 +32,42 @@ export async function sendTelegramMessage(text) {
 }
 
 /**
+ * Envía una foto con descripción al bot de Telegram.
+ * @param {File} file - Archivo de imagen.
+ * @param {string} caption - Texto de descripción (soporta HTML).
+ */
+export async function sendTelegramPhoto(file, caption) {
+  if (!BOT_TOKEN || !CHAT_ID) {
+    console.warn('Telegram: Variables de entorno no configuradas.');
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('chat_id', CHAT_ID);
+  formData.append('photo', file);
+  if (caption) {
+    formData.append('caption', caption);
+    formData.append('parse_mode', 'HTML');
+  }
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      console.error('Telegram error:', err);
+      throw new Error(err.description || 'Error enviando foto');
+    }
+  } catch (err) {
+    console.error('Error enviando foto a Telegram:', err);
+    throw err;
+  }
+}
+
+/**
  * Devuelve el emoji correspondiente al tipo de entrega.
  */
 function getEmojiEntrega(tipo) {

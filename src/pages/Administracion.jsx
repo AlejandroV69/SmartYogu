@@ -10,7 +10,7 @@ export default function Administracion() {
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [modalOpen, setModalOpen] = useState(false);
   const [modalRecibo, setModalRecibo] = useState(null); // pedido seleccionado para ver recibo
-  const [signedUrl, setSignedUrl] = useState(null); // url firmada temporal
+  const [signedImageUrl, setSignedImageUrl] = useState(null); // URL firmada de la imagen
   const [addFlavorModalOpen, setAddFlavorModalOpen] = useState(false);
   const [editFlavorModalOpen, setEditFlavorModalOpen] = useState(false);
   const [addVariantModalOpen, setAddVariantModalOpen] = useState(false);
@@ -19,6 +19,18 @@ export default function Administracion() {
   const [newFlavor, setNewFlavor] = useState({ sabor: '', presentacion: '', precio: '', stock: '' });
   const [newVariant, setNewVariant] = useState({ presentacion: '', precio: '', stock: '' });
   const [savingFlavor, setSavingFlavor] = useState(false);
+
+  // ── Configuración de Pago Móvil (Almacenado localmente / Fallback) ──
+  const [pagoMovilConfig, setPagoMovilConfig] = useState(() => {
+    const saved = localStorage.getItem('smartyogu_pagomovil_config');
+    return saved ? JSON.parse(saved) : {
+      banco: 'Mercantil (0105)',
+      cedula: 'V-29.863.496',
+      telefono: '0414-315-6352'
+    };
+  });
+  const [editPagoMovil, setEditPagoMovil] = useState({ ...pagoMovilConfig });
+  const [savingConfig, setSavingConfig] = useState(false);
 
   // ── Datos ─────────────────────────────────────────────────────────
   const [inventario, setInventario] = useState([]);
@@ -49,33 +61,7 @@ export default function Administracion() {
     fetchInventario();
   }, []);
 
-  // ── GET: URL firmada para comprobante privado ────────────────────
-  useEffect(() => {
-    async function fetchSignedUrl() {
-      if (modalOpen && modalRecibo?.comprobante_url) {
-        let filePath = modalRecibo.comprobante_url;
-        // Si es una URL completa (viejo bucket público), extraer solo el nombre
-        if (filePath.startsWith('http')) {
-          const parts = filePath.split('/');
-          filePath = parts[parts.length - 1];
-        }
-        // Generar URL firmada válida por 1 hora
-        const { data, error } = await supabase.storage
-          .from('comprobantes')
-          .createSignedUrl(filePath, 3600);
-        if (data) {
-          setSignedUrl(data.signedUrl);
-        } else {
-          console.error("Error generando URL firmada:", error);
-        }
-      } else {
-        setSignedUrl(null);
-      }
-    }
-    fetchSignedUrl();
-  }, [modalOpen, modalRecibo]);
-
-  // ── GET: pedidos (cola de verificación) ──────────────────────────
+  // ── GET & REALTIME: pedidos e historial ──────────────────────────
   useEffect(() => {
     async function fetchPedidos() {
       setLoadingPed(true);
@@ -92,11 +78,7 @@ export default function Administracion() {
       }
       setLoadingPed(false);
     }
-    fetchPedidos();
-  }, []);
 
-  // ── GET: historial de pedidos ────────────────────────────────────
-  useEffect(() => {
     async function fetchHistorial() {
       setLoadingHist(true);
       const { data, error } = await supabase
@@ -112,7 +94,66 @@ export default function Administracion() {
       }
       setLoadingHist(false);
     }
+
+    fetchPedidos();
     fetchHistorial();
+
+    // Suscripción Realtime para pedidos
+    const channel = supabase
+      .channel('pedidos-realtime-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', scheme: 'public', table: 'pedidos' },
+        (payload) => {
+          console.log('Cambio detectado en tiempo real:', payload);
+          const { eventType, new: newRow, old: oldRow } = payload;
+
+          if (eventType === 'INSERT') {
+            // Si es un pedido nuevo
+            if (['Pago por Verificar', 'Pendiente por Pago'].includes(newRow.estado)) {
+              setPedidos((prev) => [newRow, ...prev]);
+            } else if (['Aprobado', 'Rechazado'].includes(newRow.estado)) {
+              setHistorial((prev) => [newRow, ...prev]);
+            }
+          } else if (eventType === 'UPDATE') {
+            // Actualizar la cola de verificación
+            setPedidos((prev) => {
+              const existeEnCola = prev.some((p) => p.id === newRow.id);
+              if (['Pago por Verificar', 'Pendiente por Pago'].includes(newRow.estado)) {
+                if (existeEnCola) {
+                  return prev.map((p) => (p.id === newRow.id ? newRow : p));
+                } else {
+                  return [newRow, ...prev];
+                }
+              } else {
+                return prev.filter((p) => p.id !== newRow.id);
+              }
+            });
+
+            // Actualizar el historial
+            setHistorial((prev) => {
+              const existeEnHist = prev.some((h) => h.id === newRow.id);
+              if (['Aprobado', 'Rechazado'].includes(newRow.estado)) {
+                if (existeEnHist) {
+                  return prev.map((h) => (h.id === newRow.id ? newRow : h));
+                } else {
+                  return [newRow, ...prev];
+                }
+              } else {
+                return prev.filter((h) => h.id !== newRow.id);
+              }
+            });
+          } else if (eventType === 'DELETE') {
+            setPedidos((prev) => prev.filter((p) => p.id !== oldRow.id));
+            setHistorial((prev) => prev.filter((h) => h.id !== oldRow.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // ── UPDATE: stock de inventario (+/-) ────────────────────────────
@@ -332,6 +373,28 @@ export default function Administracion() {
     );
   };
 
+  const handleOpenRecibo = async (pedido) => {
+    setModalRecibo(pedido);
+    setSignedImageUrl(null);
+    setModalOpen(true);
+    
+    if (pedido.comprobante_url) {
+      // Extract file path from full URL or use as is if it's just the file name
+      let filePath = pedido.comprobante_url;
+      if (filePath.includes('/storage/v1/object/public/comprobantes/')) {
+        filePath = filePath.split('/storage/v1/object/public/comprobantes/')[1];
+      }
+      
+      const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(filePath, 60 * 60); // 1 hour valid
+      if (!error && data) {
+        setSignedImageUrl(data.signedUrl);
+      } else {
+        // Fallback to original URL
+        setSignedImageUrl(pedido.comprobante_url);
+      }
+    }
+  };
+
   // ── Helpers UI ───────────────────────────────────────────────────
   const getStockColor = (stock) => {
     if (stock <= 10) return 'bg-error';
@@ -475,13 +538,91 @@ export default function Administracion() {
             </div>
           )}
 
+          {/* Dashboard KPIs Section */}
+          {activeTab === 'Dashboard' && (
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* KPI: Ventas de Hoy */}
+              <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start text-on-surface-variant">
+                    <span className="text-xs uppercase font-bold tracking-wider">Ventas de Hoy</span>
+                    <span className="material-symbols-outlined text-primary">calendar_today</span>
+                  </div>
+                  <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
+                    ${(() => {
+                      const hoy = new Date().toISOString().split('T')[0];
+                      const totalHoy = historial
+                        .filter(p => p.estado === 'Aprobado' && p.created_at.startsWith(hoy))
+                        .reduce((sum, p) => sum + Number(p.total), 0);
+                      return totalHoy.toFixed(2);
+                    })()}
+                  </h3>
+                </div>
+                <p className="text-[11px] text-on-surface-variant mt-3">
+                  Solo pedidos con estado <span className="text-green-400 font-bold">Aprobado</span>
+                </p>
+              </div>
+
+              {/* KPI: Pedidos Pendientes */}
+              <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start text-on-surface-variant">
+                    <span className="text-xs uppercase font-bold tracking-wider">Por Verificar</span>
+                    <span className="material-symbols-outlined text-tertiary">pending_actions</span>
+                  </div>
+                  <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
+                    {pedidos.filter(p => p.estado === 'Pago por Verificar').length}
+                  </h3>
+                </div>
+                <p className="text-[11px] text-on-surface-variant mt-3">
+                  Pagos pendientes de aprobación manual
+                </p>
+              </div>
+
+              {/* KPI: Total Recaudado */}
+              <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start text-on-surface-variant">
+                    <span className="text-xs uppercase font-bold tracking-wider">Total Histórico</span>
+                    <span className="material-symbols-outlined text-green-500">payments</span>
+                  </div>
+                  <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
+                    ${historial
+                      .filter(p => p.estado === 'Aprobado')
+                      .reduce((sum, p) => sum + Number(p.total), 0)
+                      .toFixed(2)}
+                  </h3>
+                </div>
+                <p className="text-[11px] text-on-surface-variant mt-3">
+                  Acumulado histórico aprobado
+                </p>
+              </div>
+
+              {/* KPI: Alertas de Stock */}
+              <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start text-on-surface-variant">
+                    <span className="text-xs uppercase font-bold tracking-wider">Alertas de Stock</span>
+                    <span className="material-symbols-outlined text-error">warning</span>
+                  </div>
+                  <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
+                    {inventario.filter(item => item.stock <= 10).length}
+                  </h3>
+                </div>
+                <p className="text-[11px] text-on-surface-variant mt-3">
+                  Productos con stock menor o igual a 10 unidades
+                </p>
+              </div>
+            </section>
+          )}
+
           {/* Hero */}
-          <section className="relative h-40 md:h-48 rounded-xl overflow-hidden bg-surface-container-low border border-outline-variant">
+          <section className="relative h-28 rounded-xl overflow-hidden bg-surface-container-low border border-outline-variant flex items-center px-6">
             <div className="absolute inset-0 bg-gradient-to-r from-surface-container-low via-transparent to-transparent"></div>
-            <div className="relative z-10 p-6 flex flex-col justify-end h-full">
-              <p className="text-primary font-bold text-xs uppercase tracking-tighter mb-1">Resumen Operativo</p>
-              <h1 className="font-extrabold text-3xl md:text-5xl text-on-surface leading-none">
-                Panel Principal
+            <div className="relative z-10">
+              <p className="text-primary font-bold text-xs uppercase tracking-tighter mb-0.5">Gestión Administrativa</p>
+              <h1 className="font-extrabold text-2xl md:text-3xl text-on-surface leading-none">
+                {activeTab === 'Dashboard' ? 'Panel General' : activeTab === 'Inventory' ? 'Inventario de Sabores' : activeTab === 'Verification' ? 'Cola de Verificación' : activeTab === 'History' ? 'Historial de Pedidos' : 'Configuración'}
               </h1>
             </div>
           </section>
@@ -627,7 +768,7 @@ export default function Administracion() {
                   <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
                       <tr className="bg-surface-container-high border-b border-outline-variant">
-                        {['Cliente', 'Entrega', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
+                        {['Cliente', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
                           <th key={h} className={`px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest whitespace-nowrap ${h === 'Comprobante' || h === 'Acciones' ? 'text-center' : 'text-left'}`}>
                             {h}
                           </th>
@@ -656,19 +797,7 @@ export default function Administracion() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm font-medium text-on-surface whitespace-nowrap flex items-center gap-1.5">
-                              {pedido.tipo_entrega === 'AutoServicio' && <span className="text-xs">🟢</span>}
-                              {pedido.tipo_entrega === 'Pick-up' && <span className="text-xs">🔵</span>}
-                              {pedido.tipo_entrega === 'Delivery' && <span className="text-xs">🟠</span>}
-                              {pedido.tipo_entrega || '-'}
-                            </p>
-                            {pedido.tipo_entrega === 'Delivery' && pedido.direccion_envio && (
-                              <p className="text-xs text-on-surface-variant max-w-[200px] truncate" title={pedido.direccion_envio}>
-                                {pedido.direccion_envio}
-                              </p>
-                            )}
-                          </td>
+
                           <td className="px-6 py-4 text-sm text-on-surface-variant font-medium whitespace-nowrap">
                             {pedido.numero_transaccion ? `#${pedido.numero_transaccion}` : '-'}
                           </td>
@@ -687,7 +816,7 @@ export default function Administracion() {
                             {pedido.comprobante_url ? (
                               <button
                                 className="inline-flex items-center justify-center gap-1 px-3 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all whitespace-nowrap mx-auto"
-                                onClick={() => { setModalRecibo(pedido); setModalOpen(true); }}
+                                onClick={() => handleOpenRecibo(pedido)}
                               >
                                 <span className="material-symbols-outlined text-sm">visibility</span>
                                 Ver
@@ -751,7 +880,7 @@ export default function Administracion() {
                   <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
                       <tr className="bg-surface-container-high border-b border-outline-variant">
-                        {['Cliente', 'Entrega', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante'].map((h) => (
+                        {['Cliente', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante'].map((h) => (
                           <th key={h} className={`px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest whitespace-nowrap ${h === 'Comprobante' ? 'text-center' : 'text-left'}`}>
                             {h}
                           </th>
@@ -780,14 +909,7 @@ export default function Administracion() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-6 py-4">
-                            <p className="text-sm font-medium text-on-surface whitespace-nowrap flex items-center gap-1.5">
-                              {pedido.tipo_entrega === 'AutoServicio' && <span className="text-xs">🟢</span>}
-                              {pedido.tipo_entrega === 'Pick-up' && <span className="text-xs">🔵</span>}
-                              {pedido.tipo_entrega === 'Delivery' && <span className="text-xs">🟠</span>}
-                              {pedido.tipo_entrega || '-'}
-                            </p>
-                          </td>
+
                           <td className="px-6 py-4 text-sm text-on-surface-variant font-medium whitespace-nowrap">
                             {pedido.numero_transaccion ? `#${pedido.numero_transaccion}` : '-'}
                           </td>
@@ -806,7 +928,7 @@ export default function Administracion() {
                             {pedido.comprobante_url ? (
                               <button
                                 className="inline-flex items-center justify-center gap-1 px-3 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all whitespace-nowrap mx-auto"
-                                onClick={() => { setModalRecibo(pedido); setModalOpen(true); }}
+                                onClick={() => handleOpenRecibo(pedido)}
                               >
                                 <span className="material-symbols-outlined text-sm">visibility</span>
                                 Ver
@@ -823,7 +945,82 @@ export default function Administracion() {
               )}
             </section>
           )}
-        </div>
+
+          {/* ── Sección 4: Configuración ─────────────────────────────── */}
+          {activeTab === 'Settings' && (
+            <section id="settings" className="max-w-2xl bg-surface-container border border-outline-variant rounded-xl p-6">
+              <div className="mb-6">
+                <h3 className="font-semibold text-xl text-on-surface">Datos de Pago Móvil</h3>
+                <p className="text-on-surface-variant text-sm font-medium">
+                  Configura los datos que ven los clientes al reportar su pago
+                </p>
+              </div>
+
+               <form 
+                 onSubmit={(e) => {
+                   e.preventDefault();
+                   setSavingConfig(true);
+                   localStorage.setItem('smartyogu_pagomovil_config', JSON.stringify(editPagoMovil));
+                   setPagoMovilConfig({ ...editPagoMovil });
+                   
+                   // Notificar a otras pestañas/ventanas del cambio
+                   window.dispatchEvent(new Event('storage'));
+                   
+                   setTimeout(() => {
+                     setSavingConfig(false);
+                     alert('Configuración guardada exitosamente.');
+                   }, 500);
+                 }}
+                 className="space-y-4"
+               >
+                 <div>
+                   <label className="text-sm font-medium text-on-surface-variant block mb-1">Banco</label>
+                   <input
+                     required
+                     type="text"
+                     className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                     value={editPagoMovil.banco}
+                     onChange={(e) => setEditPagoMovil({ ...editPagoMovil, banco: e.target.value })}
+                   />
+                 </div>
+                 <div>
+                   <label className="text-sm font-medium text-on-surface-variant block mb-1">Cédula / RIF</label>
+                   <input
+                     required
+                     type="text"
+                     className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                     value={editPagoMovil.cedula}
+                     onChange={(e) => setEditPagoMovil({ ...editPagoMovil, cedula: e.target.value })}
+                   />
+                 </div>
+                 <div>
+                   <label className="text-sm font-medium text-on-surface-variant block mb-1">Teléfono</label>
+                   <input
+                     required
+                     type="text"
+                     className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                     value={editPagoMovil.telefono}
+                     onChange={(e) => setEditPagoMovil({ ...editPagoMovil, telefono: e.target.value })}
+                   />
+                 </div>
+                 
+                 <div className="pt-2">
+                   <button
+                     type="submit"
+                     disabled={savingConfig}
+                     className="px-6 py-3 bg-primary text-on-primary rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer active:scale-95"
+                   >
+                     {savingConfig ? (
+                       <><span className="material-symbols-outlined animate-spin">sync</span> Guardando...</>
+                     ) : (
+                       'Guardar Configuración'
+                     )}
+                   </button>
+                 </div>
+               </form>
+             </section>
+           )}
+         </div>
 
         {/* Footer */}
         <footer className="px-8 py-6 text-on-surface-variant flex justify-between items-center bg-surface-container-lowest">
@@ -860,19 +1057,13 @@ export default function Administracion() {
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="p-6 bg-surface-container-lowest flex justify-center">
+            <div className="p-6 bg-surface-container-lowest">
               {modalRecibo.comprobante_url ? (
-                signedUrl ? (
-                  <img
-                    src={signedUrl}
-                    alt="Comprobante de pago"
-                    className="w-full max-h-[60vh] object-contain rounded-lg border border-outline-variant"
-                  />
-                ) : (
-                  <div className="w-full aspect-[3/4] bg-surface-container-highest rounded-lg flex items-center justify-center border border-outline-variant animate-pulse">
-                    <span className="material-symbols-outlined text-on-surface-variant text-4xl animate-spin">sync</span>
-                  </div>
-                )
+                <img
+                  src={signedImageUrl || modalRecibo.comprobante_url}
+                  alt="Comprobante de pago"
+                  className="w-full max-h-[60vh] object-contain rounded-lg border border-outline-variant"
+                />
               ) : (
                 <div className="w-full aspect-[3/4] bg-surface-container-highest rounded-lg flex items-center justify-center border border-outline-variant">
                   <span className="material-symbols-outlined text-on-surface-variant text-6xl">receipt_long</span>
@@ -884,22 +1075,37 @@ export default function Administracion() {
                 <p className="text-sm text-on-surface font-medium">${Number(modalRecibo.total).toFixed(2)}</p>
                 <p className="text-xs text-on-surface-variant">{formatDate(modalRecibo.created_at)}</p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-2">
                 <button
-                  className="px-4 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface border border-outline-variant rounded-lg transition-all"
+                  className="px-3 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface border border-outline-variant rounded-lg transition-all"
                   onClick={() => setModalOpen(false)}
                 >
                   Cerrar
                 </button>
-                <button
-                  className="px-6 py-2 bg-primary text-on-primary rounded-lg text-sm font-medium active:scale-95 transition-all"
-                  onClick={() => {
-                    cambiarEstadoPedido(modalRecibo.id, 'Aprobado');
-                    setModalOpen(false);
-                  }}
-                >
-                  Validar Ahora
-                </button>
+                {modalRecibo.estado !== 'Rechazado' && modalRecibo.estado !== 'Aprobado' && (
+                  <button
+                    className="px-3 py-2 bg-error/20 text-error border border-error/30 rounded-lg text-sm font-medium hover:bg-error hover:text-on-error transition-all active:scale-95"
+                    onClick={() => {
+                      if (window.confirm('¿Estás seguro de que deseas rechazar este pago?')) {
+                        cambiarEstadoPedido(modalRecibo.id, 'Rechazado');
+                        setModalOpen(false);
+                      }
+                    }}
+                  >
+                    Rechazar
+                  </button>
+                )}
+                {modalRecibo.estado !== 'Aprobado' && (
+                  <button
+                    className="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-medium active:scale-95 transition-all"
+                    onClick={() => {
+                      cambiarEstadoPedido(modalRecibo.id, 'Aprobado');
+                      setModalOpen(false);
+                    }}
+                  >
+                    Aprobar Pago
+                  </button>
+                )}
               </div>
             </div>
           </div>
