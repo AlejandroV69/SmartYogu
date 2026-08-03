@@ -22,6 +22,27 @@ export default function ReportarPago() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
 
+  // ── Configuración Dinámica de Pago Móvil ───────────────────────
+  const [pagoMovilConfig, setPagoMovilConfig] = useState({
+    banco: 'Mercantil (0105)',
+    cedula: 'V-29.863.496',
+    telefono: '0414-315-6352'
+  });
+
+  useEffect(() => {
+    function loadConfig() {
+      const saved = localStorage.getItem('smartyogu_pagomovil_config');
+      if (saved) {
+        setPagoMovilConfig(JSON.parse(saved));
+      }
+    }
+    loadConfig();
+
+    // Escuchar actualizaciones desde el panel admin en otras pestañas
+    window.addEventListener('storage', loadConfig);
+    return () => window.removeEventListener('storage', loadConfig);
+  }, []);
+
   useEffect(() => {
     async function fetchBCV() {
       try {
@@ -231,19 +252,19 @@ export default function ReportarPago() {
             <div className="space-y-4">
               <div className="flex justify-between items-center border-b border-outline-variant pb-3">
                 <span className="text-on-surface-variant text-sm font-medium">Banco</span>
-                <span className="text-on-surface font-bold">Mercantil (0105)</span>
+                <span className="text-on-surface font-bold">{pagoMovilConfig.banco}</span>
               </div>
               <div className="flex justify-between items-center border-b border-outline-variant pb-3">
                 <span className="text-on-surface-variant text-sm font-medium">Cédula</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-on-surface font-bold">V-29.863.496</span>
+                  <span className="text-on-surface font-bold">{pagoMovilConfig.cedula}</span>
                   <button
                     type="button"
-                    className={`transition-all active:scale-90 ${copied === '29863496' ? 'text-green-400' : 'text-primary'}`}
-                    onClick={() => copyToClipboard('29863496')}
+                    className={`transition-all active:scale-90 ${copied === pagoMovilConfig.cedula.replace(/\D/g, '') ? 'text-green-400' : 'text-primary'}`}
+                    onClick={() => copyToClipboard(pagoMovilConfig.cedula.replace(/\D/g, ''))}
                   >
                     <span className="material-symbols-outlined text-[18px]">
-                      {copied === '29863496' ? 'check' : 'content_copy'}
+                      {copied === pagoMovilConfig.cedula.replace(/\D/g, '') ? 'check' : 'content_copy'}
                     </span>
                   </button>
                 </div>
@@ -251,14 +272,14 @@ export default function ReportarPago() {
               <div className="flex justify-between items-center">
                 <span className="text-on-surface-variant text-sm font-medium">Teléfono</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-on-surface font-bold">0414-315-6352</span>
+                  <span className="text-on-surface font-bold">{pagoMovilConfig.telefono}</span>
                   <button
                     type="button"
-                    className={`transition-all active:scale-90 ${copied === '04143156352' ? 'text-green-400' : 'text-primary'}`}
-                    onClick={() => copyToClipboard('04143156352')}
+                    className={`transition-all active:scale-90 ${copied === pagoMovilConfig.telefono.replace(/\D/g, '') ? 'text-green-400' : 'text-primary'}`}
+                    onClick={() => copyToClipboard(pagoMovilConfig.telefono.replace(/\D/g, ''))}
                   >
                     <span className="material-symbols-outlined text-[18px]">
-                      {copied === '04143156352' ? 'check' : 'content_copy'}
+                      {copied === pagoMovilConfig.telefono.replace(/\D/g, '') ? 'check' : 'content_copy'}
                     </span>
                   </button>
                 </div>
@@ -365,14 +386,25 @@ export default function ReportarPago() {
             </label>
 
             {fileName && (
-              <div className="flex items-center justify-between p-4 bg-surface-container-highest rounded-lg border border-primary/30">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">image</span>
-                  <span className="text-on-surface text-sm truncate max-w-[200px]">{fileName}</span>
+              <div className="flex flex-col gap-2 p-4 bg-surface-container-highest rounded-lg border border-primary/30">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary">image</span>
+                    <span className="text-on-surface text-sm truncate max-w-[200px]">{fileName}</span>
+                  </div>
+                  <button type="button" className="text-error hover:scale-110 transition-transform" onClick={removeFile}>
+                    <span className="material-symbols-outlined text-[20px]">cancel</span>
+                  </button>
                 </div>
-                <button type="button" className="text-error hover:scale-110 transition-transform" onClick={removeFile}>
-                  <span className="material-symbols-outlined text-[20px]">cancel</span>
-                </button>
+                {file && (
+                  <div className="relative mt-2 rounded-lg overflow-hidden border border-outline-variant aspect-video bg-black/20 flex items-center justify-center">
+                    <img 
+                      src={URL.createObjectURL(file)} 
+                      alt="Vista previa" 
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>
