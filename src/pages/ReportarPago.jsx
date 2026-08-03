@@ -82,6 +82,50 @@ export default function ReportarPago() {
     setFileName('');
   };
 
+  // Función auxiliar para comprimir la imagen en el cliente antes de subir
+  const compressImage = (fileInstance) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(fileInstance);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_WIDTH = 1000; // Limitar ancho para que pese poquísimo
+          let width = img.width;
+          let height = img.height;
+
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convertir a blob JPEG con calidad reducida (70%)
+          canvas.toBlob((blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], fileInstance.name, {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            } else {
+              resolve(fileInstance); // fallback
+            }
+          }, 'image/jpeg', 0.7);
+        };
+        img.onerror = () => resolve(fileInstance);
+      };
+      reader.onerror = () => resolve(fileInstance);
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!file) {
@@ -92,15 +136,18 @@ export default function ReportarPago() {
     setError(null);
 
     try {
+      // 0. Comprimir imagen en el cliente para subida ultra rápida
+      const fileToUpload = await compressImage(file);
+
       let comprobanteUrl = null;
 
       // 1. Subir archivo a Supabase Storage
-      const ext = file.name.split('.').pop();
+      const ext = fileToUpload.name.split('.').pop();
       const filePath = `reporte_directo_${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from('comprobantes')
-        .upload(filePath, file, { upsert: true });
+        .upload(filePath, fileToUpload, { upsert: true });
 
       if (uploadError) {
         console.warn('No se pudo subir el archivo al Storage:', uploadError.message);
@@ -131,7 +178,7 @@ export default function ReportarPago() {
         throw new Error(`Error registrando el pago en el sistema: ${insertError.message}`);
       }
 
-      // 3. Notificar a Telegram
+      // 3. Notificar a Telegram con la foto comprimida
       const caption = `💸 <b>¡NUEVO REPORTE DE PAGO!</b>\n\n` +
         `👤 <b>Cliente:</b> ${formData.nombre}\n` +
         `🪪 <b>Cédula/RIF:</b> ${formData.cedula}\n` +
@@ -139,7 +186,7 @@ export default function ReportarPago() {
         `💳 <b>Ref. Pago:</b> ${formData.referencia}\n` +
         `💰 <b>Monto:</b> $${formData.monto}\n`;
 
-      await sendTelegramPhoto(file, caption);
+      await sendTelegramPhoto(fileToUpload, caption);
       
       setDone(true);
       setFormData({ nombre: '', cedula: '', telefono: '', referencia: '', monto: '' });
@@ -173,9 +220,6 @@ export default function ReportarPago() {
             <img src="/favicon.png" alt="THÖRGURT Logo" className="w-8 h-8 object-contain drop-shadow-md" />
             <h1 className="font-bold text-xl text-primary tracking-tight">THÖRGURT</h1>
           </div>
-        </div>
-        <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant">
-          <span className="material-symbols-outlined text-primary">account_circle</span>
         </div>
       </header>
 
