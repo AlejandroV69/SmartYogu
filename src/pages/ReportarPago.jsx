@@ -361,9 +361,20 @@ export default function ReportarPago() {
               {formData.monto && bcvRate ? (
                 <div className="flex justify-between items-center pb-1">
                   <span className="text-on-surface-variant text-sm font-medium">Monto en Bs</span>
-                  <span className="text-primary font-bold text-right text-sm">
-                    {(parseFloat(formData.monto) * bcvRate).toFixed(2)} Bs
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-primary font-bold text-sm">
+                      {(parseFloat(formData.monto) * bcvRate).toFixed(2)} Bs
+                    </span>
+                    <button
+                      type="button"
+                      className={`transition-all active:scale-90 ${copied === (parseFloat(formData.monto) * bcvRate).toFixed(2) ? 'text-green-400' : 'text-primary'}`}
+                      onClick={() => copyToClipboard((parseFloat(formData.monto) * bcvRate).toFixed(2))}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">
+                        {copied === (parseFloat(formData.monto) * bcvRate).toFixed(2) ? 'check' : 'content_copy'}
+                      </span>
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </div>
