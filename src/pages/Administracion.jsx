@@ -583,9 +583,17 @@ export default function Administracion() {
                   </div>
                   <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
                     ${(() => {
-                      const hoy = new Date().toISOString().split('T')[0];
+                      const toLocalDateStr = (isoStr) => {
+                        if (!isoStr) return '';
+                        const d = new Date(isoStr);
+                        const year = d.getFullYear();
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        return `${year}-${month}-${day}`;
+                      };
+                      const hoy = toLocalDateStr(new Date());
                       const totalHoy = historial
-                        .filter(p => p.estado === 'Aprobado' && p.created_at.startsWith(hoy))
+                        .filter(p => p.estado === 'Aprobado' && toLocalDateStr(p.created_at) === hoy)
                         .reduce((sum, p) => sum + Number(p.total), 0);
                       return totalHoy.toFixed(2);
                     })()}
@@ -631,19 +639,19 @@ export default function Administracion() {
                 </p>
               </div>
 
-              {/* KPI: Alertas de Stock */}
+              {/* KPI: Stock Total */}
               <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
                 <div>
                   <div className="flex justify-between items-start text-on-surface-variant">
-                    <span className="text-xs uppercase font-bold tracking-wider">Alertas de Stock</span>
-                    <span className="material-symbols-outlined text-error">warning</span>
+                    <span className="text-xs uppercase font-bold tracking-wider">Stock Total</span>
+                    <span className="material-symbols-outlined text-primary">inventory_2</span>
                   </div>
                   <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
-                    {inventario.filter(item => item.stock <= 10).length}
+                    {inventario.reduce((sum, item) => sum + (Number(item.stock) || 0), 0)}
                   </h3>
                 </div>
                 <p className="text-[11px] text-on-surface-variant mt-3">
-                  Productos con stock menor o igual a 10 unidades
+                  Total de unidades disponibles en inventario
                 </p>
               </div>
             </section>
@@ -760,9 +768,9 @@ export default function Administracion() {
                                   style={{ width: getStockWidth(item.stock) }}
                                 />
                               </div>
-                              <span className={`text-[10px] font-bold ${item.stock <= 10 ? 'text-error' : item.stock <= 30 ? 'text-tertiary' : 'text-primary'
+                              <span className={`text-[10px] font-bold ${item.stock === 0 ? 'text-error' : item.stock <= 10 ? 'text-error' : item.stock <= 30 ? 'text-tertiary' : 'text-primary'
                                 }`}>
-                                {item.stock <= 10 ? 'BAJO' : item.stock <= 30 ? 'MEDIO' : 'OK'}
+                                {item.stock === 0 ? 'AGOTADO' : item.stock <= 10 ? 'BAJO' : item.stock <= 30 ? 'MEDIO' : 'OK'}
                               </span>
                             </div>
                           </div>
