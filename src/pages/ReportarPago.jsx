@@ -58,10 +58,24 @@ export default function ReportarPago() {
     fetchBCV();
   }, []);
 
-  const copyToClipboard = (text) => {
+  const copyToClipboard = (text, key = null) => {
     navigator.clipboard.writeText(text);
-    setCopied(text);
+    setCopied(key || text);
     setTimeout(() => setCopied(''), 2000);
+  };
+
+  const copyAllDetails = () => {
+    const cleanCedula = pagoMovilConfig.cedula.replace(/\D/g, '');
+    const cleanTelefono = pagoMovilConfig.telefono.replace(/\D/g, '');
+    const bBs = formData.monto && bcvRate ? (parseFloat(formData.monto) * bcvRate).toFixed(2) : '';
+    
+    let textToCopy = `Banco: ${pagoMovilConfig.banco}\nCédula: ${cleanCedula}\nTeléfono: ${cleanTelefono}`;
+    if (bBs) {
+      textToCopy += `\nMonto: ${bBs} Bs`;
+    } else if (formData.monto) {
+      textToCopy += `\nMonto: $${formData.monto} USD`;
+    }
+    copyToClipboard(textToCopy, 'all');
   };
 
   const handleChange = (e) => {
@@ -313,7 +327,7 @@ export default function ReportarPago() {
                   </button>
                 </div>
               </div>
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center border-b border-outline-variant pb-3">
                 <span className="text-on-surface-variant text-sm font-medium">Teléfono</span>
                 <div className="flex items-center gap-2">
                   <span className="text-on-surface font-bold">{pagoMovilConfig.telefono}</span>
@@ -328,6 +342,46 @@ export default function ReportarPago() {
                   </button>
                 </div>
               </div>
+              <div className="flex justify-between items-center border-b border-outline-variant pb-3">
+                <span className="text-on-surface-variant text-sm font-medium">Monto (USD)</span>
+                <div className="relative w-36">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant font-bold text-sm">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="monto"
+                    required
+                    placeholder="0.00"
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-7 pr-3 py-1.5 text-right focus:border-primary focus:outline-none text-on-surface transition-colors font-bold text-sm"
+                    value={formData.monto}
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
+              {formData.monto && bcvRate ? (
+                <div className="flex justify-between items-center pb-1">
+                  <span className="text-on-surface-variant text-sm font-medium">Monto en Bs</span>
+                  <span className="text-primary font-bold text-right text-sm">
+                    {(parseFloat(formData.monto) * bcvRate).toFixed(2)} Bs
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            <div className="mt-4 pt-4 border-t border-outline-variant">
+              <button
+                type="button"
+                onClick={copyAllDetails}
+                className={`w-full py-2.5 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 border transition-all active:scale-95 duration-150 ${
+                  copied === 'all'
+                    ? 'bg-green-500/20 text-green-400 border-green-500/30'
+                    : 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/25'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {copied === 'all' ? 'check' : 'content_copy'}
+                </span>
+                {copied === 'all' ? '¡Datos Copiados!' : 'Copiar todo para Pago Móvil'}
+              </button>
             </div>
           </div>
 
@@ -381,26 +435,6 @@ export default function ReportarPago() {
               />
             </div>
 
-            <div>
-              <label className="text-on-surface text-xs font-bold uppercase tracking-widest mb-1 block">Monto (USD)</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant font-bold">$</span>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="monto"
-                  required
-                  className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl pl-10 pr-4 py-3 focus:border-primary focus:outline-none text-on-surface transition-colors"
-                  value={formData.monto}
-                  onChange={handleChange}
-                />
-              </div>
-              {formData.monto && bcvRate && (
-                <p className="text-sm font-medium text-on-surface-variant mt-1 text-right">
-                  ~ {(Number(formData.monto) * bcvRate).toFixed(2)} Bs
-                </p>
-              )}
-            </div>
           </div>
 
           <div className="space-y-4">
