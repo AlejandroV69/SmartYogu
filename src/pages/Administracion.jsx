@@ -40,6 +40,39 @@ export default function Administracion() {
   const [loadingPed, setLoadingPed] = useState(true);
   const [loadingHist, setLoadingHist] = useState(true);
   const [error, setError] = useState(null);
+  const [adminUser, setAdminUser] = useState({ name: 'Alejandro Viana', initials: 'AV' });
+
+  // ── GET: user credentials & display name ──────────────────────────
+  useEffect(() => {
+    async function getUserData() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        let name = user.user_metadata?.full_name || user.user_metadata?.name;
+        const email = user.email ? user.email.toLowerCase() : '';
+        
+        if (email.includes('dorcary') || email.includes('gonzalez')) {
+          name = 'Dorcary Gonzalez';
+        } else if (email.includes('alejandro') || email.includes('viana')) {
+          name = 'Alejandro Viana';
+        }
+        
+        if (!name) {
+          const part = email.split('@')[0];
+          name = part.split(/[\._-]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        }
+        
+        const initials = name
+          .split(' ')
+          .map(n => n[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase();
+          
+        setAdminUser({ name, initials });
+      }
+    }
+    getUserData();
+  }, []);
 
   // ── GET: inventario ──────────────────────────────────────────────
   useEffect(() => {
@@ -478,10 +511,10 @@ export default function Administracion() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold">
-                AV
+                {adminUser.initials}
               </div>
               <div>
-                <p className="text-sm font-medium text-on-surface">Alejandro Viana</p>
+                <p className="text-sm font-medium text-on-surface">{adminUser.name}</p>
                 <p className="text-[10px] text-on-surface-variant uppercase tracking-widest">Master Access</p>
               </div>
             </div>
