@@ -31,15 +31,15 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-surface flex items-center justify-center p-4">
-      {/* Background decoration - radial gradients (no filter:blur = no Safari paint block) */}
+      {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
         <div 
-          className="absolute -top-[20%] -right-[10%] w-[60%] h-[60%] rounded-full opacity-25"
-          style={{ background: 'radial-gradient(circle, #0ca1f2 0%, transparent 70%)' }}
+          className="absolute -top-[30%] -right-[15%] w-[70%] h-[70%] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(12,161,242,0.55) 0%, transparent 65%)' }}
         />
         <div 
-          className="absolute -bottom-[20%] -left-[10%] w-[60%] h-[60%] rounded-full opacity-20"
-          style={{ background: 'radial-gradient(circle, #ffb873 0%, transparent 70%)' }}
+          className="absolute -bottom-[30%] -left-[15%] w-[70%] h-[70%] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(255,184,115,0.40) 0%, transparent 65%)' }}
         />
       </div>
 
@@ -53,7 +53,7 @@ export default function Login() {
           <span className="font-medium text-sm">Volver al inicio</span>
         </button>
 
-        <div className="bg-surface-container/80 backdrop-blur-md border border-outline-variant p-8 rounded-3xl shadow-2xl">
+        <div className="bg-surface-container border border-outline-variant/60 p-8 rounded-3xl shadow-[0_0_60px_rgba(12,161,242,0.15),0_20px_60px_rgba(0,0,0,0.5)]">
         <div className="text-center mb-8">
           <div className="w-24 h-24 bg-primary-container/20 text-on-primary-container rounded-[2rem] flex items-center justify-center mx-auto mb-4 shadow-lg border border-primary/20 overflow-hidden">
             <img src="/favicon.png" alt="THÖRGURT Logo" className="w-16 h-16 object-contain" />
