@@ -30,18 +30,13 @@ export default function Login() {
   };
 
   return (
-    <div className="relative min-h-screen bg-surface flex items-center justify-center p-4">
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
-        <div 
-          className="absolute -top-[10%] -right-[10%] w-[80vw] h-[80vw] max-w-[600px] max-h-[600px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(12,161,242,0.4) 0%, rgba(12,161,242,0.05) 40%, transparent 70%)' }}
-        />
-        <div 
-          className="absolute -bottom-[10%] -left-[10%] w-[80vw] h-[80vw] max-w-[600px] max-h-[600px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(255,184,115,0.3) 0%, rgba(255,184,115,0.05) 40%, transparent 70%)' }}
-        />
-      </div>
+    <div 
+      className="relative min-h-screen bg-surface flex items-center justify-center p-4"
+      style={{
+        backgroundImage: 'radial-gradient(circle at 90% 10%, rgba(12,161,242,0.18) 0%, transparent 50%), radial-gradient(circle at 10% 90%, rgba(255,184,115,0.12) 0%, transparent 50%)',
+        backgroundAttachment: 'fixed'
+      }}
+    >
 
       <div className="w-full max-w-md relative z-10">
         {/* Back button */}
