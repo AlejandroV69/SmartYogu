@@ -19,6 +19,7 @@ export default function Administracion() {
   const [newFlavor, setNewFlavor] = useState({ sabor: '', presentacion: '', precio: '', stock: '' });
   const [newVariant, setNewVariant] = useState({ presentacion: '', precio: '', stock: '' });
   const [savingFlavor, setSavingFlavor] = useState(false);
+  const [catalogoCopied, setCatalogoCopied] = useState(false);
 
   // ── Configuración de Pago Móvil (Almacenado localmente / Fallback) ──
   const [pagoMovilConfig, setPagoMovilConfig] = useState(() => {
@@ -458,6 +459,97 @@ export default function Administracion() {
     navigate('/login');
   };
 
+  // ── Catálogo: copiar al portapapeles ─────────────────────────────
+  const handleCompartirCatalogo = async () => {
+    // Agrupar por sabor y solo incluir items con stock > 0
+    const agrupado = inventario
+      .filter(item => item.stock > 0)
+      .reduce((acc, item) => {
+        const key = item.sabor.trim();
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(item);
+        return acc;
+      }, {});
+
+    const saboresOrdenados = Object.keys(agrupado).sort((a, b) => a.localeCompare(b));
+
+    if (saboresOrdenados.length === 0) {
+      alert('No hay productos disponibles (todos con stock 0).');
+      return;
+    }
+
+    const emojiFrutas = {
+      'fresa': '🍓',
+      'melocotón': '🍑',
+      'melocoton': '🍑',
+      'durazno': '🍑',
+      'piña': '🍍',
+      'pina': '🍍',
+      'parchita': '🟡',
+      'maracuyá': '🟡',
+      'maracuya': '🟡',
+      'mango': '🥭',
+      'mora': '🫐',
+      'arándano': '🫐',
+      'arandano': '🫐',
+      'coco': '🥥',
+      'chocolate': '🍫',
+      'nutella': '🍫',
+      'oreo': '🍪',
+      'vainilla': '🍦',
+      'manzana': '🍎',
+      'uva': '🍇',
+      'banana': '🍌',
+      'cambur': '🍌',
+      'guanábana': '🍈',
+      'guanabana': '🍈',
+      'limón': '🍋',
+      'limon': '🍋',
+      'kiwi': '🥝'
+    };
+
+    const lineas = saboresOrdenados.map(sabor => {
+      const variantes = agrupado[sabor].sort((a, b) => a.precio - b.precio);
+      const variantesTexto = variantes
+        .map(v => `    • ${v.presentacion.trim()} → $${Number(v.precio).toFixed(2)}`)
+        .join('\n');
+      
+      const flavorKey = sabor.toLowerCase().trim();
+      const emoji = emojiFrutas[flavorKey] || '🥣';
+
+      return `${emoji} *${sabor}*\n${variantesTexto}`;
+    });
+
+    const sep = '- - - - - - - - - - - - -';
+    const mensaje =
+      `🥣 *Disponibilidad THÖRGURT* 🥣\n` +
+      `${sep}\n\n` +
+      lineas.join('\n\n') +
+      `\n\n${sep}\n` +
+      `📦 Hacemos delivery\n` +
+      `📲 ¡Escríbenos para hacer tu pedido!\n\n` +
+      `🌐 Registra tu compra aquí:\n` +
+      `https://smart-yogu.vercel.app/`;
+
+    try {
+      await navigator.clipboard.writeText(mensaje);
+      setCatalogoCopied(true);
+      setTimeout(() => setCatalogoCopied(false), 2500);
+    } catch {
+      // Fallback por si el navegador bloquea clipboard
+      const ta = document.createElement('textarea');
+      ta.value = mensaje;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      setCatalogoCopied(true);
+      setTimeout(() => setCatalogoCopied(false), 2500);
+    }
+  };
+
   return (
     <div className="flex h-screen overflow-hidden bg-background text-on-surface">
       {/* Overlay móvil del sidebar */}
@@ -676,13 +768,31 @@ export default function Administracion() {
                   <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Inventario de Sabores</h3>
                   <p className="text-on-surface-variant text-sm font-medium">Gestión de stock en tiempo real</p>
                 </div>
-                <button
-                  className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
-                  onClick={() => setAddFlavorModalOpen(true)}
-                >
-                  <span className="material-symbols-outlined">add</span>
-                  <span className="hidden md:inline">Añadir Sabor</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    className={`px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg ${
+                      catalogoCopied
+                        ? 'bg-green-500 text-white'
+                        : 'bg-surface-container-high text-on-surface border border-outline-variant hover:bg-surface-container-highest'
+                    }`}
+                    onClick={handleCompartirCatalogo}
+                    title="Copiar disponibilidad al portapapeles"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">
+                      {catalogoCopied ? 'check_circle' : 'content_copy'}
+                    </span>
+                    <span className="hidden md:inline">
+                      {catalogoCopied ? '¡Copiado!' : 'Copiar Disponibilidad'}
+                    </span>
+                  </button>
+                  <button
+                    className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
+                    onClick={() => setAddFlavorModalOpen(true)}
+                  >
+                    <span className="material-symbols-outlined">add</span>
+                    <span className="hidden md:inline">Añadir Sabor</span>
+                  </button>
+                </div>
               </div>
 
               {loadingInv ? (
