@@ -31,15 +31,15 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-surface flex items-center justify-center p-4">
-      {/* Background decoration - GPU composited for Safari performance */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {/* Background decoration - radial gradients (no filter:blur = no Safari paint block) */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
         <div 
-          className="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] bg-primary/20 blur-[80px] rounded-full"
-          style={{ willChange: 'filter', transform: 'translate3d(0,0,0)' }}
+          className="absolute -top-[20%] -right-[10%] w-[60%] h-[60%] rounded-full opacity-25"
+          style={{ background: 'radial-gradient(circle, #0ca1f2 0%, transparent 70%)' }}
         />
         <div 
-          className="absolute -bottom-[20%] -left-[10%] w-[50%] h-[50%] bg-tertiary/20 blur-[80px] rounded-full"
-          style={{ willChange: 'filter', transform: 'translate3d(0,0,0)' }}
+          className="absolute -bottom-[20%] -left-[10%] w-[60%] h-[60%] rounded-full opacity-20"
+          style={{ background: 'radial-gradient(circle, #ffb873 0%, transparent 70%)' }}
         />
       </div>
 
