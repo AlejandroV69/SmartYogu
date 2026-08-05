@@ -31,10 +31,16 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-surface flex items-center justify-center p-4">
-      {/* Background decoration */}
+      {/* Background decoration - GPU composited for Safari performance */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] bg-primary/20 blur-[120px] rounded-full"></div>
-        <div className="absolute -bottom-[20%] -left-[10%] w-[50%] h-[50%] bg-tertiary/20 blur-[120px] rounded-full"></div>
+        <div 
+          className="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] bg-primary/20 blur-[80px] rounded-full"
+          style={{ willChange: 'filter', transform: 'translate3d(0,0,0)' }}
+        />
+        <div 
+          className="absolute -bottom-[20%] -left-[10%] w-[50%] h-[50%] bg-tertiary/20 blur-[80px] rounded-full"
+          style={{ willChange: 'filter', transform: 'translate3d(0,0,0)' }}
+        />
       </div>
 
       <div className="w-full max-w-md relative z-10">
@@ -47,7 +53,7 @@ export default function Login() {
           <span className="font-medium text-sm">Volver al inicio</span>
         </button>
 
-        <div className="bg-surface-container/80 backdrop-blur-xl border border-outline-variant p-8 rounded-3xl shadow-2xl">
+        <div className="bg-surface-container/80 backdrop-blur-md border border-outline-variant p-8 rounded-3xl shadow-2xl">
         <div className="text-center mb-8">
           <div className="w-24 h-24 bg-primary-container/20 text-on-primary-container rounded-[2rem] flex items-center justify-center mx-auto mb-4 shadow-lg border border-primary/20 overflow-hidden">
             <img src="/favicon.png" alt="THÖRGURT Logo" className="w-16 h-16 object-contain" />
