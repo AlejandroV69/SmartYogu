@@ -41,7 +41,7 @@ export default function Administracion() {
   const [loadingPed, setLoadingPed] = useState(true);
   const [loadingHist, setLoadingHist] = useState(true);
   const [error, setError] = useState(null);
-  const [adminUser, setAdminUser] = useState({ name: 'Alejandro Viana', initials: 'AV' });
+  const [adminUser, setAdminUser] = useState({ name: 'Alejandro Viana', initials: 'AV', avatar: null });
 
   // ── GET: user credentials & display name ──────────────────────────
   useEffect(() => {
@@ -50,11 +50,14 @@ export default function Administracion() {
       if (user) {
         let name = user.user_metadata?.full_name || user.user_metadata?.name;
         const email = user.email ? user.email.toLowerCase() : '';
+        let avatar = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
         
         if (email.includes('dorcary') || email.includes('gonzalez')) {
           name = 'Dorcary Gonzalez';
+          avatar = '/admin-dorcary.jpg';
         } else if (email.includes('alejandro') || email.includes('viana')) {
           name = 'Alejandro Viana';
+          avatar = '/admin-alejandro.jpg';
         }
         
         if (!name) {
@@ -69,7 +72,7 @@ export default function Administracion() {
           .slice(0, 2)
           .toUpperCase();
           
-        setAdminUser({ name, initials });
+        setAdminUser({ name, initials, avatar });
       }
     }
     getUserData();
@@ -602,8 +605,20 @@ export default function Administracion() {
         <div className="mt-auto px-4 pt-6 pb-6 border-t border-outline-variant">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold">
-                {adminUser.initials}
+              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold overflow-hidden">
+                {adminUser.avatar ? (
+                  <img 
+                    src={adminUser.avatar} 
+                    alt={adminUser.name} 
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Si la imagen falla en cargar (por permisos del link de Google Photos), vuelve a las iniciales
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                ) : (
+                  <span>{adminUser.initials}</span>
+                )}
               </div>
               <div>
                 <p className="text-sm font-medium text-on-surface">{adminUser.name}</p>
@@ -645,8 +660,19 @@ export default function Administracion() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-primary text-xl">account_circle</span>
+            <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer hover:scale-105 transition-transform overflow-hidden border border-outline-variant">
+              {adminUser.avatar ? (
+                <img 
+                  src={adminUser.avatar} 
+                  alt={adminUser.name} 
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                  }}
+                />
+              ) : (
+                <span className="material-symbols-outlined text-primary text-xl">account_circle</span>
+              )}
             </div>
           </div>
         </header>
