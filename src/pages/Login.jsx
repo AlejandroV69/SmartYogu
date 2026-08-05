@@ -34,12 +34,12 @@ export default function Login() {
       {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
         <div 
-          className="absolute -top-[30%] -right-[15%] w-[70%] h-[70%] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(12,161,242,0.55) 0%, transparent 65%)' }}
+          className="absolute -top-[10%] -right-[10%] w-[80vw] h-[80vw] max-w-[600px] max-h-[600px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(12,161,242,0.4) 0%, rgba(12,161,242,0.05) 40%, transparent 70%)' }}
         />
         <div 
-          className="absolute -bottom-[30%] -left-[15%] w-[70%] h-[70%] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(255,184,115,0.40) 0%, transparent 65%)' }}
+          className="absolute -bottom-[10%] -left-[10%] w-[80vw] h-[80vw] max-w-[600px] max-h-[600px] rounded-full"
+          style={{ background: 'radial-gradient(circle, rgba(255,184,115,0.3) 0%, rgba(255,184,115,0.05) 40%, transparent 70%)' }}
         />
       </div>
 
