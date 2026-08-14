@@ -334,7 +334,7 @@ export default function Administracion() {
         sabor: selectedFlavorForVariant,
         presentacion: newVariant.presentacion,
         precio: parseFloat(newVariant.precio),
-        stock: parseInt(newVariant.stock, 10),
+        stock: 0,
       }])
       .select();
 
@@ -344,7 +344,7 @@ export default function Administracion() {
     } else if (data) {
       setInventario((prev) => [...prev, data[0]]);
       setAddVariantModalOpen(false);
-      setNewVariant({ presentacion: '', precio: '', stock: '' });
+      setNewVariant({ presentacion: '', precio: '' });
     }
     setSavingFlavor(false);
   };
@@ -360,7 +360,7 @@ export default function Administracion() {
         sabor: newFlavor.sabor,
         presentacion: newFlavor.presentacion,
         precio: parseFloat(newFlavor.precio),
-        stock: parseInt(newFlavor.stock, 10),
+        stock: 0,
       }])
       .select();
 
@@ -371,7 +371,7 @@ export default function Administracion() {
       // Actualización optimista
       setInventario((prev) => [...prev, data[0]].sort((a, b) => a.sabor.localeCompare(b.sabor)));
       setAddFlavorModalOpen(false);
-      setNewFlavor({ sabor: '', presentacion: '', precio: '', stock: '' });
+      setNewFlavor({ sabor: '', presentacion: '', precio: '' });
     }
     setSavingFlavor(false);
   };
@@ -1782,32 +1782,18 @@ export default function Administracion() {
                   onChange={(e) => setNewFlavor({ ...newFlavor, presentacion: e.target.value })}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-on-surface-variant block mb-1">Precio ($)</label>
-                  <input
-                    required
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="2.50"
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
-                    value={newFlavor.precio}
-                    onChange={(e) => setNewFlavor({ ...newFlavor, precio: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-on-surface-variant block mb-1">Stock Inicial</label>
-                  <input
-                    required
-                    type="number"
-                    min="0"
-                    placeholder="100"
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
-                    value={newFlavor.stock}
-                    onChange={(e) => setNewFlavor({ ...newFlavor, stock: e.target.value })}
-                  />
-                </div>
+              <div>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Precio ($)</label>
+                <input
+                  required
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="2.50"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                  value={newFlavor.precio}
+                  onChange={(e) => setNewFlavor({ ...newFlavor, precio: e.target.value })}
+                />
               </div>
               <div className="pt-4 flex gap-3">
                 <button
@@ -1867,32 +1853,18 @@ export default function Administracion() {
                   onChange={(e) => setNewVariant({ ...newVariant, presentacion: e.target.value })}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-on-surface-variant block mb-1">Precio ($)</label>
-                  <input
-                    required
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="5.00"
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
-                    value={newVariant.precio}
-                    onChange={(e) => setNewVariant({ ...newVariant, precio: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-on-surface-variant block mb-1">Stock Inicial</label>
-                  <input
-                    required
-                    type="number"
-                    min="0"
-                    placeholder="10"
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
-                    value={newVariant.stock}
-                    onChange={(e) => setNewVariant({ ...newVariant, stock: e.target.value })}
-                  />
-                </div>
+              <div>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Precio ($)</label>
+                <input
+                  required
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="5.00"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                  value={newVariant.precio}
+                  onChange={(e) => setNewVariant({ ...newVariant, precio: e.target.value })}
+                />
               </div>
               <div className="pt-4 flex gap-3">
                 <button
