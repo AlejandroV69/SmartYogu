@@ -55,6 +55,7 @@ export default function Administracion() {
   useEffect(() => {
     async function getUserData() {
       const { data: { user } } = await supabase.auth.getUser();
+      console.log('User object:', user);
       if (user) {
         let name = user.user_metadata?.full_name || user.user_metadata?.name;
         const email = user.email ? user.email.toLowerCase() : '';
@@ -63,6 +64,21 @@ export default function Administracion() {
           name = 'Dorcary Gonzalez';
         } else if (email.includes('alejandro') || email.includes('viana')) {
           name = 'Alejandro Viana';
+        }
+        
+        let avatarUrl = 
+          user.user_metadata?.avatar_url || 
+          user.user_metadata?.picture || 
+          user.identities?.[0]?.identity_data?.avatar_url ||
+          user.identities?.[0]?.identity_data?.picture ||
+          null;
+        
+        if (!avatarUrl) {
+          if (email.includes('dorcary') || email.includes('gonzalez')) {
+            avatarUrl = '/admin-dorcary.jpg';
+          } else if (email.includes('alejandro') || email.includes('viana')) {
+            avatarUrl = '/admin-alejandro.jpg';
+          }
         }
         
         if (!name) {
@@ -77,7 +93,7 @@ export default function Administracion() {
           .slice(0, 2)
           .toUpperCase();
           
-        setAdminUser({ name, initials });
+        setAdminUser({ name, initials, avatarUrl });
       }
     }
     getUserData();
@@ -646,8 +662,12 @@ export default function Administracion() {
         <div className="mt-auto px-4 pt-6 pb-6 border-t border-outline-variant">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold">
-                {adminUser.initials}
+              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold overflow-hidden">
+                {adminUser.avatarUrl ? (
+                  <img src={adminUser.avatarUrl} alt={adminUser.name} className="w-full h-full object-cover" />
+                ) : (
+                  adminUser.initials
+                )}
               </div>
               <div>
                 <p className="text-sm font-medium text-on-surface">{adminUser.name}</p>
@@ -689,8 +709,12 @@ export default function Administracion() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
-              <span className="material-symbols-outlined text-primary text-xl">account_circle</span>
+            <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer hover:scale-105 transition-transform overflow-hidden">
+              {adminUser.avatarUrl ? (
+                <img src={adminUser.avatarUrl} alt={adminUser.name} className="w-full h-full object-cover" />
+              ) : (
+                <span className="material-symbols-outlined text-primary text-xl">account_circle</span>
+              )}
             </div>
           </div>
         </header>
@@ -804,13 +828,72 @@ export default function Administracion() {
                   <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Inventario de Sabores</h3>
                   <p className="text-on-surface-variant text-sm font-medium">Gestión de stock en tiempo real</p>
                 </div>
-                <button
-                  className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
-                  onClick={() => setAddFlavorModalOpen(true)}
-                >
-                  <span className="material-symbols-outlined">add</span>
-                  <span className="hidden md:inline">Añadir Sabor</span>
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    className="bg-surface-container-highest border border-outline-variant text-on-surface hover:bg-primary/10 hover:text-primary hover:border-primary/30 px-3 md:px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow"
+                    onClick={() => {
+                      const getSaborEmoji = (sabor) => {
+                        const s = sabor.toLowerCase();
+                        if (s.includes('fresa')) return '🍓';
+                        if (s.includes('melocotón') || s.includes('melocoton') || s.includes('durazno')) return '🍑';
+                        if (s.includes('parchita') || s.includes('maracuyá') || s.includes('maracuya')) return '🟡';
+                        if (s.includes('piña') || s.includes('pina')) return '🍍';
+                        if (s.includes('mora') || s.includes('arándano')) return '🫐';
+                        if (s.includes('coco')) return '🥥';
+                        if (s.includes('mango')) return '🥭';
+                        return '🍦';
+                      };
+
+                      let texto = `🥣 *Disponibilidad THÖRGURT* 🥣\n- - - - - - - - - - - - -\n\n`;
+                      const productosAgrupados = getInventarioAgrupado();
+                      let hayDisponibles = false;
+
+                      productosAgrupados.forEach(grupo => {
+                        const variantesDisponibles = grupo.variantes.filter(item => getStockTotal(item.id) > 0);
+                        
+                        if (variantesDisponibles.length > 0) {
+                          hayDisponibles = true;
+                          const emoji = getSaborEmoji(grupo.sabor);
+                          texto += `${emoji} *${grupo.sabor}*\n`;
+                          variantesDisponibles.forEach(v => {
+                            texto += `    • ${v.presentacion} → $${Number(v.precio).toFixed(2)}\n`;
+                          });
+                          texto += `\n`;
+                        }
+                      });
+
+                      if (!hayDisponibles) {
+                        texto += `Actualmente no hay productos disponibles.\n\n`;
+                      }
+
+                      texto += `- - - - - - - - - - - - -\n📦 Hacemos delivery\n📲 ¡Escríbenos para hacer tu pedido!\n\n🌐 Registra tu compra aquí:\nhttps://smart-yogu.vercel.app/`;
+
+                      if (navigator.clipboard) {
+                        navigator.clipboard.writeText(texto);
+                        alert('¡Lista de disponibilidad global copiada al portapapeles!');
+                      } else {
+                        const ta = document.createElement('textarea');
+                        ta.value = texto;
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                        alert('¡Lista de disponibilidad copiada!');
+                      }
+                    }}
+                    title="Copiar lista global de productos disponibles"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">share</span>
+                    <span className="hidden md:inline">Compartir Disponibilidad</span>
+                  </button>
+                  <button
+                    className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
+                    onClick={() => setAddFlavorModalOpen(true)}
+                  >
+                    <span className="material-symbols-outlined">add</span>
+                    <span className="hidden md:inline">Añadir Sabor</span>
+                  </button>
+                </div>
               </div>
 
               {loadingInv ? (
@@ -1141,13 +1224,80 @@ export default function Administracion() {
                   <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Inventario por Sedes</h3>
                   <p className="text-on-surface-variant text-sm font-medium">Stock independiente por punto de venta</p>
                 </div>
-                <button
-                  className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
-                  onClick={() => setAddSedeModalOpen(true)}
-                >
-                  <span className="material-symbols-outlined">add</span>
-                  <span className="hidden md:inline">Nueva Sede</span>
-                </button>
+                <div className="flex gap-2">
+                  {selectedSedeTab && (
+                    <button
+                      className="bg-surface-container-highest border border-outline-variant text-on-surface hover:bg-primary/10 hover:text-primary hover:border-primary/30 px-3 md:px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow"
+                      onClick={() => {
+                        const sedeActual = sedes.find(s => s.id === selectedSedeTab);
+                        
+                        const getSaborEmoji = (sabor) => {
+                          const s = sabor.toLowerCase();
+                          if (s.includes('fresa')) return '🍓';
+                          if (s.includes('melocotón') || s.includes('melocoton') || s.includes('durazno')) return '🍑';
+                          if (s.includes('parchita') || s.includes('maracuyá') || s.includes('maracuya')) return '🟡';
+                          if (s.includes('piña') || s.includes('pina')) return '🍍';
+                          if (s.includes('mora') || s.includes('arándano')) return '🫐';
+                          if (s.includes('coco')) return '🥥';
+                          if (s.includes('mango')) return '🥭';
+                          return '🍦';
+                        };
+
+                        let texto = `🥣 *Disponibilidad THÖRGURT* 🥣\n📍 *Sede:* ${sedeActual?.nombre || 'General'}\n- - - - - - - - - - - - -\n\n`;
+                        
+                        const productosAgrupados = getInventarioAgrupado();
+                        let hayDisponibles = false;
+                        
+                        productosAgrupados.forEach(grupo => {
+                          const variantesDisponibles = grupo.variantes.filter(item => {
+                            const st = inventarioSedes.find(i => i.sede_id === selectedSedeTab && i.producto_id === item.id)?.stock ?? 0;
+                            return st > 0;
+                          });
+                          
+                          if (variantesDisponibles.length > 0) {
+                            hayDisponibles = true;
+                            const emoji = getSaborEmoji(grupo.sabor);
+                            texto += `${emoji} *${grupo.sabor}*\n`;
+                            variantesDisponibles.forEach(v => {
+                              texto += `    • ${v.presentacion} → $${Number(v.precio).toFixed(2)}\n`;
+                            });
+                            texto += `\n`;
+                          }
+                        });
+                        
+                        if (!hayDisponibles) {
+                          texto += `Actualmente no hay productos disponibles en esta sede.\n\n`;
+                        }
+                        
+                        texto += `- - - - - - - - - - - - -\n📦 Hacemos delivery\n📲 ¡Escríbenos para hacer tu pedido!\n\n🌐 Registra tu compra aquí:\nhttps://smart-yogu.vercel.app/`;
+
+                        if (navigator.clipboard) {
+                          navigator.clipboard.writeText(texto);
+                          alert('¡Lista de disponibilidad copiada al portapapeles! Puedes pegarla en WhatsApp.');
+                        } else {
+                          const ta = document.createElement('textarea');
+                          ta.value = texto;
+                          document.body.appendChild(ta);
+                          ta.select();
+                          document.execCommand('copy');
+                          document.body.removeChild(ta);
+                          alert('¡Lista de disponibilidad copiada al portapapeles!');
+                        }
+                      }}
+                      title="Copiar lista de productos disponibles en esta sede"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">share</span>
+                      <span className="hidden md:inline">Compartir Disponibilidad</span>
+                    </button>
+                  )}
+                  <button
+                    className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
+                    onClick={() => setAddSedeModalOpen(true)}
+                  >
+                    <span className="material-symbols-outlined">add</span>
+                    <span className="hidden md:inline">Nueva Sede</span>
+                  </button>
+                </div>
               </div>
 
               {loadingSedes ? (
