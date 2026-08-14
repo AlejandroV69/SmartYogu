@@ -47,6 +47,8 @@ export default function Administracion() {
   const [adminUser, setAdminUser] = useState({ name: 'Alejandro Viana', initials: 'AV' });
   const [addSedeModalOpen, setAddSedeModalOpen] = useState(false);
   const [addProductoSedeModalOpen, setAddProductoSedeModalOpen] = useState(false);
+  const [editSedeModalOpen, setEditSedeModalOpen] = useState(false);
+  const [sedeToEdit, setSedeToEdit] = useState(null);
   const [newSede, setNewSede] = useState({ nombre: '' });
   const [newProductoSede, setNewProductoSede] = useState({ producto_id: '', stock: '' });
   const [currentSedeForProduct, setCurrentSedeForProduct] = useState(null);
@@ -511,6 +513,41 @@ export default function Administracion() {
     }
   };
 
+  // ── UPDATE: renombrar sede ──────────────────────────────────
+  const handleEditSede = async (e) => {
+    e.preventDefault();
+    if (!sedeToEdit) return;
+    setSavingFlavor(true);
+    const { error } = await supabase
+      .from('sedes')
+      .update({ nombre: sedeToEdit.nombre })
+      .eq('id', sedeToEdit.id);
+    if (error) {
+      setError(`Error al renombrar sede: ${error.message}`);
+    } else {
+      setSedes(prev => prev.map(s => s.id === sedeToEdit.id ? { ...s, nombre: sedeToEdit.nombre } : s));
+      setEditSedeModalOpen(false);
+      setSedeToEdit(null);
+    }
+    setSavingFlavor(false);
+  };
+
+  // ── DELETE: eliminar sede ──────────────────────────────────
+  const handleDeleteSede = async (sedeId, sedeNombre) => {
+    if (!window.confirm(`¿Seguro que quieres eliminar la sede "${sedeNombre}"? Esto también borrará todo su inventario asignado.`)) return;
+    const { error } = await supabase
+      .from('sedes')
+      .delete()
+      .eq('id', sedeId);
+    if (error) {
+      setError(`Error al eliminar sede: ${error.message}`);
+    } else {
+      setSedes(prev => prev.filter(s => s.id !== sedeId));
+      setInventarioSedes(prev => prev.filter(i => i.sede_id !== sedeId));
+      if (selectedSedeTab === sedeId) setSelectedSedeTab(null);
+    }
+  };
+
   const getInventarioAgrupado = () => {
     const term = searchQuery.toLowerCase().trim();
     const filtered = term ? inventario.filter(item => 
@@ -799,12 +836,86 @@ export default function Administracion() {
                     <span className="material-symbols-outlined text-error">warning</span>
                   </div>
                   <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
-                    {inventario.filter(item => getStockTotal(item.id) <= 10).length}
+                    {inventario.filter(item => {
+                      const total = getStockTotal(item.id);
+                      return total > 0 && total <= 10;
+                    }).length}
                   </h3>
                 </div>
                 <p className="text-[11px] text-on-surface-variant mt-3">
-                  Productos con stock menor o igual a 10 unidades
+                  Productos activos con stock bajo (1 a 10 unidades)
                 </p>
+              </div>
+            </section>
+          )}
+
+          {/* KPIs por Sede */}
+          {activeTab === 'Dashboard' && sedes.length > 0 && (
+            <section>
+              <h3 className="font-semibold text-base text-on-surface-variant uppercase tracking-wider mb-3">Stock por Sede</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {sedes.map(sede => {
+                  const totalUnidadesSede = inventarioSedes
+                    .filter(i => i.sede_id === sede.id)
+                    .reduce((sum, i) => sum + i.stock, 0);
+                  const productosBajos = inventario.filter(p => {
+                    const s = inventarioSedes.find(i => i.sede_id === sede.id && i.producto_id === p.id)?.stock ?? 0;
+                    return s > 0 && s <= 10;
+                  }).length;
+                  const productosCargados = inventarioSedes.filter(i => i.sede_id === sede.id && i.stock > 0).length;
+                  return (
+                    <div
+                      key={sede.id}
+                      className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col gap-3 cursor-pointer hover:border-primary/40 hover:bg-surface-container-high transition-all"
+                      onClick={() => { setSelectedSedeTab(sede.id); setActiveTab('Sedes'); }}
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                            <span className="material-symbols-outlined text-primary text-[18px]">store</span>
+                          </div>
+                          <div>
+                            <p className="font-bold text-on-surface text-sm">{sede.nombre}</p>
+                            <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
+                              sede.activa ? 'bg-green-500/15 text-green-400' : 'bg-error/15 text-error'
+                            }`}>{sede.activa ? 'Activa' : 'Inactiva'}</span>
+                          </div>
+                        </div>
+                        {productosBajos > 0 && (
+                          <span className="text-[10px] bg-error/10 text-error border border-error/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[12px]">warning</span>
+                            {productosBajos} bajo
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-baseline justify-between">
+                        <div>
+                          <p className="text-[10px] text-on-surface-variant uppercase font-bold">Stock Total</p>
+                          <div className="flex items-baseline gap-1.5">
+                            <span className="text-3xl font-extrabold text-on-surface tabular-nums">{totalUnidadesSede}</span>
+                            <span className="text-xs text-on-surface-variant font-medium">unidades</span>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] text-on-surface-variant uppercase font-bold">Variantes</p>
+                          <p className="text-sm font-bold text-on-surface tabular-nums">
+                            {productosCargados} <span className="text-xs text-on-surface-variant font-normal">de {inventario.length}</span>
+                          </p>
+                        </div>
+                      </div>
+                      <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all duration-500"
+                          style={{ width: inventario.length > 0 ? `${Math.min(100, (productosCargados / inventario.length) * 100)}%` : '0%' }}
+                        />
+                      </div>
+                      <p className="text-[10px] text-on-surface-variant flex items-center justify-between">
+                        <span>Gestionar inventario</span>
+                        <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
             </section>
           )}
@@ -1026,7 +1137,7 @@ export default function Administracion() {
                   <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
                       <tr className="bg-surface-container-high border-b border-outline-variant">
-                        {['Cliente', 'Ref.', 'Monto', 'Sede', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
+                        {['Cliente', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
                           <th key={h} className={`px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest whitespace-nowrap ${h === 'Comprobante' || h === 'Acciones' ? 'text-center' : 'text-left'}`}>
                             {h}
                           </th>
@@ -1061,12 +1172,6 @@ export default function Administracion() {
                           </td>
                           <td className="px-6 py-4 text-sm font-medium text-primary whitespace-nowrap">
                             ${Number(pedido.total).toFixed(2)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-surface-container-highest text-xs font-medium text-on-surface-variant">
-                              <span className="material-symbols-outlined text-[12px]">store</span>
-                              {getSedeName(pedido.sede_id)}
-                            </span>
                           </td>
                           <td className="px-6 py-4 text-sm text-on-surface-variant whitespace-nowrap">
                             {formatDate(pedido.created_at)}
@@ -1144,7 +1249,7 @@ export default function Administracion() {
                   <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
                       <tr className="bg-surface-container-high border-b border-outline-variant">
-                        {['Cliente', 'Ref.', 'Monto', 'Sede', 'Fecha / Hora', 'Estado', 'Comprobante'].map((h) => (
+                        {['Cliente', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante'].map((h) => (
                           <th key={h} className={`px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest whitespace-nowrap ${h === 'Comprobante' ? 'text-center' : 'text-left'}`}>
                             {h}
                           </th>
@@ -1179,12 +1284,6 @@ export default function Administracion() {
                           </td>
                           <td className="px-6 py-4 text-sm font-medium text-primary whitespace-nowrap">
                             ${Number(pedido.total).toFixed(2)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-surface-container-highest text-xs font-medium text-on-surface-variant">
-                              <span className="material-symbols-outlined text-[12px]">store</span>
-                              {getSedeName(pedido.sede_id)}
-                            </span>
                           </td>
                           <td className="px-6 py-4 text-sm text-on-surface-variant whitespace-nowrap">
                             {formatDate(pedido.created_at)}
@@ -1340,10 +1439,10 @@ export default function Administracion() {
                     const totalUnidades = inventarioSedes
                       .filter(i => i.sede_id === selectedSedeTab)
                       .reduce((sum, i) => sum + i.stock, 0);
-                    // Productos con stock bajo = productos del catálogo con stock <= 10 en esta sede
+                    // Productos con stock bajo = productos del catálogo con stock entre 1 y 10 en esta sede
                     const bajosEnStock = inventario.filter(p => {
                       const s = inventarioSedes.find(i => i.sede_id === selectedSedeTab && i.producto_id === p.id)?.stock ?? 0;
-                      return s <= 10;
+                      return s > 0 && s <= 10;
                     }).length;
 
                     return (
@@ -1375,6 +1474,22 @@ export default function Administracion() {
                                 {sedeActual?.activa ? 'toggle_on' : 'toggle_off'}
                               </span>
                               {sedeActual?.activa ? 'Activa' : 'Inactiva'}
+                            </button>
+                            <button
+                              onClick={() => { setSedeToEdit({ ...sedeActual }); setEditSedeModalOpen(true); }}
+                              className="text-xs px-3 py-1.5 rounded-lg border border-outline-variant font-bold bg-surface-container-highest hover:bg-primary/10 hover:text-primary hover:border-primary/30 transition-all active:scale-95 flex items-center gap-1"
+                              title="Renombrar sede"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">edit</span>
+                              <span className="hidden md:inline">Renombrar</span>
+                            </button>
+                            <button
+                              onClick={() => handleDeleteSede(sedeActual.id, sedeActual.nombre)}
+                              className="text-xs px-3 py-1.5 rounded-lg border border-error/30 font-bold bg-error/10 text-error hover:bg-error/20 transition-all active:scale-95 flex items-center gap-1"
+                              title="Eliminar sede"
+                            >
+                              <span className="material-symbols-outlined text-[14px]">delete</span>
+                              <span className="hidden md:inline">Eliminar</span>
                             </button>
                           </div>
                         </div>
@@ -1982,6 +2097,62 @@ export default function Administracion() {
                   type="button"
                   className="flex-1 py-3 text-sm font-medium text-on-surface-variant border border-outline-variant rounded-lg hover:text-on-surface hover:bg-surface-container-highest transition-all"
                   onClick={() => setEditFlavorModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingFlavor}
+                  className="flex-1 py-3 bg-primary text-on-primary rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-all"
+                >
+                  {savingFlavor ? (
+                    <><span className="material-symbols-outlined animate-spin">sync</span> Guardando...</>
+                  ) : (
+                    'Guardar Cambios'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar Sede */}
+      {editSedeModalOpen && sedeToEdit && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4"
+          onClick={() => { setEditSedeModalOpen(false); setSedeToEdit(null); }}
+        >
+          <div
+            className="bg-surface-container border border-outline-variant rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-outline-variant flex justify-between items-center">
+              <h3 className="font-semibold text-xl text-on-surface">Renombrar Sede</h3>
+              <button
+                className="text-on-surface-variant hover:text-primary transition-colors"
+                onClick={() => { setEditSedeModalOpen(false); setSedeToEdit(null); }}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleEditSede} className="p-6 space-y-4">
+              <div>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Nombre de la Sede</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="Ej. Guatire, Centro, etc."
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                  value={sedeToEdit.nombre}
+                  onChange={(e) => setSedeToEdit({ ...sedeToEdit, nombre: e.target.value })}
+                />
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button
+                  type="button"
+                  className="flex-1 py-3 text-sm font-medium text-on-surface-variant border border-outline-variant rounded-lg hover:bg-surface-container-highest transition-all"
+                  onClick={() => { setEditSedeModalOpen(false); setSedeToEdit(null); }}
                 >
                   Cancelar
                 </button>
