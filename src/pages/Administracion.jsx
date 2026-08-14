@@ -19,7 +19,6 @@ export default function Administracion() {
   const [newFlavor, setNewFlavor] = useState({ sabor: '', presentacion: '', precio: '', stock: '' });
   const [newVariant, setNewVariant] = useState({ presentacion: '', precio: '', stock: '' });
   const [savingFlavor, setSavingFlavor] = useState(false);
-  const [catalogoCopied, setCatalogoCopied] = useState(false);
 
   // ── Configuración de Pago Móvil (Almacenado localmente / Fallback) ──
   const [pagoMovilConfig, setPagoMovilConfig] = useState(() => {
@@ -37,11 +36,20 @@ export default function Administracion() {
   const [inventario, setInventario] = useState([]);
   const [pedidos, setPedidos] = useState([]);
   const [historial, setHistorial] = useState([]);
+  const [sedes, setSedes] = useState([]);
+  const [inventarioSedes, setInventarioSedes] = useState([]);
+  const [selectedSedeTab, setSelectedSedeTab] = useState(null);
   const [loadingInv, setLoadingInv] = useState(true);
   const [loadingPed, setLoadingPed] = useState(true);
   const [loadingHist, setLoadingHist] = useState(true);
+  const [loadingSedes, setLoadingSedes] = useState(true);
   const [error, setError] = useState(null);
-  const [adminUser, setAdminUser] = useState({ name: 'Alejandro Viana', initials: 'AV', avatar: null });
+  const [adminUser, setAdminUser] = useState({ name: 'Alejandro Viana', initials: 'AV' });
+  const [addSedeModalOpen, setAddSedeModalOpen] = useState(false);
+  const [addProductoSedeModalOpen, setAddProductoSedeModalOpen] = useState(false);
+  const [newSede, setNewSede] = useState({ nombre: '' });
+  const [newProductoSede, setNewProductoSede] = useState({ producto_id: '', stock: '' });
+  const [currentSedeForProduct, setCurrentSedeForProduct] = useState(null);
 
   // ── GET: user credentials & display name ──────────────────────────
   useEffect(() => {
@@ -50,14 +58,11 @@ export default function Administracion() {
       if (user) {
         let name = user.user_metadata?.full_name || user.user_metadata?.name;
         const email = user.email ? user.email.toLowerCase() : '';
-        let avatar = user.user_metadata?.avatar_url || user.user_metadata?.picture || null;
         
         if (email.includes('dorcary') || email.includes('gonzalez')) {
           name = 'Dorcary Gonzalez';
-          avatar = '/admin-dorcary.jpg';
         } else if (email.includes('alejandro') || email.includes('viana')) {
           name = 'Alejandro Viana';
-          avatar = '/admin-alejandro.jpg';
         }
         
         if (!name) {
@@ -72,7 +77,7 @@ export default function Administracion() {
           .slice(0, 2)
           .toUpperCase();
           
-        setAdminUser({ name, initials, avatar });
+        setAdminUser({ name, initials });
       }
     }
     getUserData();
@@ -104,7 +109,7 @@ export default function Administracion() {
       setLoadingPed(true);
       const { data, error } = await supabase
         .from('pedidos')
-        .select('id, cliente_nombre, cedula, telefono, tipo_entrega, direccion_envio, total, estado, comprobante_url, created_at, numero_transaccion')
+        .select('id, cliente_nombre, cedula, telefono, tipo_entrega, direccion_envio, total, estado, comprobante_url, created_at, numero_transaccion, sede_id')
         .in('estado', ['Pago por Verificar', 'Pendiente por Pago'])
         .order('created_at', { ascending: false });
 
@@ -120,7 +125,7 @@ export default function Administracion() {
       setLoadingHist(true);
       const { data, error } = await supabase
         .from('pedidos')
-        .select('id, cliente_nombre, cedula, telefono, tipo_entrega, direccion_envio, total, estado, comprobante_url, created_at, numero_transaccion')
+        .select('id, cliente_nombre, cedula, telefono, tipo_entrega, direccion_envio, total, estado, comprobante_url, created_at, numero_transaccion, sede_id')
         .in('estado', ['Aprobado', 'Rechazado'])
         .order('created_at', { ascending: false });
 
@@ -191,6 +196,31 @@ export default function Administracion() {
     return () => {
       supabase.removeChannel(channel);
     };
+  }, []);
+
+  // ── GET: sedes e inventario_sedes ─────────────────────────────────
+  useEffect(() => {
+    async function fetchSedes() {
+      setLoadingSedes(true);
+      const { data, error } = await supabase
+        .from('sedes')
+        .select('*')
+        .order('nombre');
+      if (!error && data) {
+        setSedes(data);
+        if (data.length > 0) setSelectedSedeTab(data[0].id);
+      }
+      setLoadingSedes(false);
+    }
+    async function fetchInventarioSedes() {
+      const { data, error } = await supabase
+        .from('inventario_sedes')
+        .select('*, inventario(sabor, presentacion, precio)')
+        .order('sede_id');
+      if (!error && data) setInventarioSedes(data);
+    }
+    fetchSedes();
+    fetchInventarioSedes();
   }, []);
 
   // ── UPDATE: stock de inventario (+/-) ────────────────────────────
@@ -378,6 +408,93 @@ export default function Administracion() {
     }
   };
 
+  // ── UPDATE/INSERT: stock de inventario_sedes (upsert) ───────────────
+  const updateStockSede = async (sedeId, productoId, delta) => {
+    const existing = inventarioSedes.find(i => i.sede_id === sedeId && i.producto_id === productoId);
+    const currentStock = existing?.stock ?? 0;
+    const nuevoStock = Math.max(0, currentStock + delta);
+
+    if (existing) {
+      // Actualización optimista
+      setInventarioSedes(prev => prev.map(i =>
+        i.id === existing.id ? { ...i, stock: nuevoStock } : i
+      ));
+      const { error } = await supabase
+        .from('inventario_sedes')
+        .update({ stock: nuevoStock })
+        .eq('id', existing.id);
+      if (error) {
+        setInventarioSedes(prev => prev.map(i => i.id === existing.id ? { ...i, stock: currentStock } : i));
+        setError(`Error al actualizar stock: ${error.message}`);
+      }
+    } else if (nuevoStock > 0) {
+      // Crear nueva fila (primera vez que se añade stock a esta sede)
+      const { data, error } = await supabase
+        .from('inventario_sedes')
+        .insert([{ sede_id: sedeId, producto_id: productoId, stock: nuevoStock }])
+        .select('*, inventario(sabor, presentacion, precio)');
+      if (error) {
+        setError(`Error al crear stock en sede: ${error.message}`);
+      } else if (data) {
+        setInventarioSedes(prev => [...prev, data[0]]);
+      }
+    }
+  };
+
+  // ── POST: agregar producto a una sede ─────────────────────────────
+  const handleAddProductoSede = async (e) => {
+    e.preventDefault();
+    setSavingFlavor(true);
+    const { data, error } = await supabase
+      .from('inventario_sedes')
+      .insert([{
+        sede_id: currentSedeForProduct,
+        producto_id: parseInt(newProductoSede.producto_id, 10),
+        stock: parseInt(newProductoSede.stock, 10),
+      }])
+      .select('*, inventario(sabor, presentacion, precio)');
+    if (error) {
+      console.error('Error agregando producto a sede:', error.message);
+      setError(`No se pudo agregar el producto: ${error.message}`);
+    } else if (data) {
+      setInventarioSedes(prev => [...prev, data[0]]);
+      setAddProductoSedeModalOpen(false);
+      setNewProductoSede({ producto_id: '', stock: '' });
+    }
+    setSavingFlavor(false);
+  };
+
+  // ── POST: crear nueva sede ────────────────────────────────────────
+  const handleAddSede = async (e) => {
+    e.preventDefault();
+    setSavingFlavor(true);
+    const { data, error } = await supabase
+      .from('sedes')
+      .insert([{ nombre: newSede.nombre, activa: true }])
+      .select();
+    if (error) {
+      console.error('Error creando sede:', error.message);
+      setError(`No se pudo crear la sede: ${error.message}`);
+    } else if (data) {
+      setSedes(prev => [...prev, data[0]].sort((a, b) => a.nombre.localeCompare(b.nombre)));
+      setSelectedSedeTab(data[0].id);
+      setAddSedeModalOpen(false);
+      setNewSede({ nombre: '' });
+    }
+    setSavingFlavor(false);
+  };
+
+  // ── UPDATE: activar/desactivar sede ──────────────────────────────
+  const handleToggleSede = async (id, activa) => {
+    const { error } = await supabase
+      .from('sedes')
+      .update({ activa: !activa })
+      .eq('id', id);
+    if (!error) {
+      setSedes(prev => prev.map(s => s.id === id ? { ...s, activa: !activa } : s));
+    }
+  };
+
   const getInventarioAgrupado = () => {
     const term = searchQuery.toLowerCase().trim();
     const filtered = term ? inventario.filter(item => 
@@ -409,6 +526,20 @@ export default function Administracion() {
       p.estado?.toLowerCase().includes(term)
     );
   };
+
+  const getSedeName = (sedeId) => sedes.find(s => s.id === sedeId)?.nombre || '—';
+
+  // Calcula el stock TOTAL de un producto sumando todas sus sedes
+  const getStockTotal = (productoId) =>
+    inventarioSedes
+      .filter(i => i.producto_id === productoId)
+      .reduce((sum, i) => sum + i.stock, 0);
+
+  // Retorna el stock desglosado por sede para un producto
+  const getStockPorSede = (productoId) =>
+    inventarioSedes
+      .filter(i => i.producto_id === productoId)
+      .map(i => ({ nombre: getSedeName(i.sede_id), stock: i.stock }));
 
   const handleOpenRecibo = async (pedido) => {
     setModalRecibo(pedido);
@@ -462,97 +593,6 @@ export default function Administracion() {
     navigate('/login');
   };
 
-  // ── Catálogo: copiar al portapapeles ─────────────────────────────
-  const handleCompartirCatalogo = async () => {
-    // Agrupar por sabor y solo incluir items con stock > 0
-    const agrupado = inventario
-      .filter(item => item.stock > 0)
-      .reduce((acc, item) => {
-        const key = item.sabor.trim();
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(item);
-        return acc;
-      }, {});
-
-    const saboresOrdenados = Object.keys(agrupado).sort((a, b) => a.localeCompare(b));
-
-    if (saboresOrdenados.length === 0) {
-      alert('No hay productos disponibles (todos con stock 0).');
-      return;
-    }
-
-    const emojiFrutas = {
-      'fresa': '🍓',
-      'melocotón': '🍑',
-      'melocoton': '🍑',
-      'durazno': '🍑',
-      'piña': '🍍',
-      'pina': '🍍',
-      'parchita': '🟡',
-      'maracuyá': '🟡',
-      'maracuya': '🟡',
-      'mango': '🥭',
-      'mora': '🫐',
-      'arándano': '🫐',
-      'arandano': '🫐',
-      'coco': '🥥',
-      'chocolate': '🍫',
-      'nutella': '🍫',
-      'oreo': '🍪',
-      'vainilla': '🍦',
-      'manzana': '🍎',
-      'uva': '🍇',
-      'banana': '🍌',
-      'cambur': '🍌',
-      'guanábana': '🍈',
-      'guanabana': '🍈',
-      'limón': '🍋',
-      'limon': '🍋',
-      'kiwi': '🥝'
-    };
-
-    const lineas = saboresOrdenados.map(sabor => {
-      const variantes = agrupado[sabor].sort((a, b) => a.precio - b.precio);
-      const variantesTexto = variantes
-        .map(v => `    • ${v.presentacion.trim()} → $${Number(v.precio).toFixed(2)}`)
-        .join('\n');
-      
-      const flavorKey = sabor.toLowerCase().trim();
-      const emoji = emojiFrutas[flavorKey] || '🥣';
-
-      return `${emoji} *${sabor}*\n${variantesTexto}`;
-    });
-
-    const sep = '- - - - - - - - - - - - -';
-    const mensaje =
-      `🥣 *Disponibilidad THÖRGURT* 🥣\n` +
-      `${sep}\n\n` +
-      lineas.join('\n\n') +
-      `\n\n${sep}\n` +
-      `📦 Hacemos delivery\n` +
-      `📲 ¡Escríbenos para hacer tu pedido!\n\n` +
-      `🌐 Registra tu compra aquí:\n` +
-      `https://smart-yogu.vercel.app/`;
-
-    try {
-      await navigator.clipboard.writeText(mensaje);
-      setCatalogoCopied(true);
-      setTimeout(() => setCatalogoCopied(false), 2500);
-    } catch {
-      // Fallback por si el navegador bloquea clipboard
-      const ta = document.createElement('textarea');
-      ta.value = mensaje;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      setCatalogoCopied(true);
-      setTimeout(() => setCatalogoCopied(false), 2500);
-    }
-  };
-
   return (
     <div className="flex h-screen overflow-hidden bg-background text-on-surface">
       {/* Overlay móvil del sidebar */}
@@ -579,6 +619,7 @@ export default function Administracion() {
             { icon: 'inventory_2', label: 'Inventario', id: 'Inventory' },
             { icon: 'verified_user', label: 'Verificación', id: 'Verification' },
             { icon: 'history', label: 'Historial', id: 'History' },
+            { icon: 'store', label: 'Sedes', id: 'Sedes' },
             { icon: 'settings', label: 'Configuración', id: 'Settings' },
           ].map((item) => {
             const isActive = activeTab === item.id;
@@ -605,20 +646,8 @@ export default function Administracion() {
         <div className="mt-auto px-4 pt-6 pb-6 border-t border-outline-variant">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold overflow-hidden">
-                {adminUser.avatar ? (
-                  <img 
-                    src={adminUser.avatar} 
-                    alt={adminUser.name} 
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      // Si la imagen falla en cargar (por permisos del link de Google Photos), vuelve a las iniciales
-                      e.target.style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <span>{adminUser.initials}</span>
-                )}
+              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container font-bold">
+                {adminUser.initials}
               </div>
               <div>
                 <p className="text-sm font-medium text-on-surface">{adminUser.name}</p>
@@ -660,19 +689,8 @@ export default function Administracion() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer hover:scale-105 transition-transform overflow-hidden border border-outline-variant">
-              {adminUser.avatar ? (
-                <img 
-                  src={adminUser.avatar} 
-                  alt={adminUser.name} 
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                  }}
-                />
-              ) : (
-                <span className="material-symbols-outlined text-primary text-xl">account_circle</span>
-              )}
+            <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
+              <span className="material-symbols-outlined text-primary text-xl">account_circle</span>
             </div>
           </div>
         </header>
@@ -701,17 +719,9 @@ export default function Administracion() {
                   </div>
                   <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
                     ${(() => {
-                      const toLocalDateStr = (isoStr) => {
-                        if (!isoStr) return '';
-                        const d = new Date(isoStr);
-                        const year = d.getFullYear();
-                        const month = String(d.getMonth() + 1).padStart(2, '0');
-                        const day = String(d.getDate()).padStart(2, '0');
-                        return `${year}-${month}-${day}`;
-                      };
-                      const hoy = toLocalDateStr(new Date());
+                      const hoy = new Date().toISOString().split('T')[0];
                       const totalHoy = historial
-                        .filter(p => p.estado === 'Aprobado' && toLocalDateStr(p.created_at) === hoy)
+                        .filter(p => p.estado === 'Aprobado' && p.created_at.startsWith(hoy))
                         .reduce((sum, p) => sum + Number(p.total), 0);
                       return totalHoy.toFixed(2);
                     })()}
@@ -757,19 +767,19 @@ export default function Administracion() {
                 </p>
               </div>
 
-              {/* KPI: Stock Total */}
+              {/* KPI: Alertas de Stock */}
               <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
                 <div>
                   <div className="flex justify-between items-start text-on-surface-variant">
-                    <span className="text-xs uppercase font-bold tracking-wider">Stock Total</span>
-                    <span className="material-symbols-outlined text-primary">inventory_2</span>
+                    <span className="text-xs uppercase font-bold tracking-wider">Alertas de Stock</span>
+                    <span className="material-symbols-outlined text-error">warning</span>
                   </div>
                   <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
-                    {inventario.reduce((sum, item) => sum + (Number(item.stock) || 0), 0)}
+                    {inventario.filter(item => getStockTotal(item.id) <= 10).length}
                   </h3>
                 </div>
                 <p className="text-[11px] text-on-surface-variant mt-3">
-                  Total de unidades disponibles en inventario
+                  Productos con stock menor o igual a 10 unidades
                 </p>
               </div>
             </section>
@@ -781,7 +791,7 @@ export default function Administracion() {
             <div className="relative z-10">
               <p className="text-primary font-bold text-xs uppercase tracking-tighter mb-0.5">Gestión Administrativa</p>
               <h1 className="font-extrabold text-2xl md:text-3xl text-on-surface leading-none">
-                {activeTab === 'Dashboard' ? 'Panel General' : activeTab === 'Inventory' ? 'Inventario de Sabores' : activeTab === 'Verification' ? 'Cola de Verificación' : activeTab === 'History' ? 'Historial de Pedidos' : 'Configuración'}
+                {activeTab === 'Dashboard' ? 'Panel General' : activeTab === 'Inventory' ? 'Inventario de Sabores' : activeTab === 'Verification' ? 'Cola de Verificación' : activeTab === 'History' ? 'Historial de Pedidos' : activeTab === 'Sedes' ? 'Inventario por Sedes' : 'Configuración'}
               </h1>
             </div>
           </section>
@@ -794,31 +804,13 @@ export default function Administracion() {
                   <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Inventario de Sabores</h3>
                   <p className="text-on-surface-variant text-sm font-medium">Gestión de stock en tiempo real</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    className={`px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg ${
-                      catalogoCopied
-                        ? 'bg-green-500 text-white'
-                        : 'bg-surface-container-high text-on-surface border border-outline-variant hover:bg-surface-container-highest'
-                    }`}
-                    onClick={handleCompartirCatalogo}
-                    title="Copiar disponibilidad al portapapeles"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">
-                      {catalogoCopied ? 'check_circle' : 'content_copy'}
-                    </span>
-                    <span className="hidden md:inline">
-                      {catalogoCopied ? '¡Copiado!' : 'Copiar Disponibilidad'}
-                    </span>
-                  </button>
-                  <button
-                    className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
-                    onClick={() => setAddFlavorModalOpen(true)}
-                  >
-                    <span className="material-symbols-outlined">add</span>
-                    <span className="hidden md:inline">Añadir Sabor</span>
-                  </button>
-                </div>
+                <button
+                  className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
+                  onClick={() => setAddFlavorModalOpen(true)}
+                >
+                  <span className="material-symbols-outlined">add</span>
+                  <span className="hidden md:inline">Añadir Sabor</span>
+                </button>
               </div>
 
               {loadingInv ? (
@@ -873,40 +865,46 @@ export default function Administracion() {
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-4 mb-3">
-                              <div className="flex-1">
-                                <p className="text-[10px] text-on-surface-variant uppercase font-bold">Stock</p>
-                                <div className="text-3xl font-extrabold text-on-surface leading-none tabular-nums tracking-tighter">
-                                  {item.stock}
+                            <div className="mb-3">
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <p className="text-[10px] text-on-surface-variant uppercase font-bold">Stock Total</p>
+                                  <div className="text-3xl font-extrabold text-on-surface leading-none tabular-nums tracking-tighter">
+                                    {getStockTotal(item.id)}
+                                  </div>
                                 </div>
+                                <button
+                                  onClick={() => setActiveTab('Sedes')}
+                                  className="text-[10px] font-bold text-primary hover:bg-primary/10 px-2 py-1 rounded-lg transition-colors flex items-center gap-1"
+                                  title="Gestionar stock por sede"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">store</span>
+                                  Sedes
+                                </button>
                               </div>
-                              <div className="flex gap-1">
-                                <button
-                                  className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-primary hover:text-on-primary transition-all active:scale-90 border border-outline-variant"
-                                  onClick={() => updateStock(item, 1)}
-                                >
-                                  <span className="material-symbols-outlined text-sm">add</span>
-                                </button>
-                                <button
-                                  className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-error hover:text-on-error transition-all active:scale-90 border border-outline-variant disabled:opacity-40"
-                                  onClick={() => updateStock(item, -1)}
-                                  disabled={item.stock === 0}
-                                >
-                                  <span className="material-symbols-outlined text-sm">remove</span>
-                                </button>
+                              {/* Desglose por sede */}
+                              <div className="flex flex-wrap gap-1">
+                                {getStockPorSede(item.id).length === 0 ? (
+                                  <span className="text-[9px] text-on-surface-variant italic">Sin asignar a sedes</span>
+                                ) : (
+                                  getStockPorSede(item.id).map((s, idx) => (
+                                    <span key={idx} className="text-[9px] bg-surface-container-highest px-1.5 py-0.5 rounded text-on-surface-variant font-medium">
+                                      {s.nombre}: {s.stock}
+                                    </span>
+                                  ))
+                                )}
                               </div>
                             </div>
 
                             <div className="flex justify-between items-center gap-3">
                               <div className="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
                                 <div
-                                  className={`h-full transition-all duration-500 ${getStockColor(item.stock)}`}
-                                  style={{ width: getStockWidth(item.stock) }}
+                                  className={`h-full transition-all duration-500 ${getStockColor(getStockTotal(item.id))}`}
+                                  style={{ width: getStockWidth(getStockTotal(item.id)) }}
                                 />
                               </div>
-                              <span className={`text-[10px] font-bold ${item.stock === 0 ? 'text-error' : item.stock <= 10 ? 'text-error' : item.stock <= 30 ? 'text-tertiary' : 'text-primary'
-                                }`}>
-                                {item.stock === 0 ? 'AGOTADO' : item.stock <= 10 ? 'BAJO' : item.stock <= 30 ? 'MEDIO' : 'OK'}
+                              <span className={`text-[10px] font-bold ${getStockTotal(item.id) <= 10 ? 'text-error' : getStockTotal(item.id) <= 30 ? 'text-tertiary' : 'text-primary'}`}>
+                                {getStockTotal(item.id) <= 10 ? 'BAJO' : getStockTotal(item.id) <= 30 ? 'MEDIO' : 'OK'}
                               </span>
                             </div>
                           </div>
@@ -945,7 +943,7 @@ export default function Administracion() {
                   <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
                       <tr className="bg-surface-container-high border-b border-outline-variant">
-                        {['Cliente', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
+                        {['Cliente', 'Ref.', 'Monto', 'Sede', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
                           <th key={h} className={`px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest whitespace-nowrap ${h === 'Comprobante' || h === 'Acciones' ? 'text-center' : 'text-left'}`}>
                             {h}
                           </th>
@@ -980,6 +978,12 @@ export default function Administracion() {
                           </td>
                           <td className="px-6 py-4 text-sm font-medium text-primary whitespace-nowrap">
                             ${Number(pedido.total).toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-surface-container-highest text-xs font-medium text-on-surface-variant">
+                              <span className="material-symbols-outlined text-[12px]">store</span>
+                              {getSedeName(pedido.sede_id)}
+                            </span>
                           </td>
                           <td className="px-6 py-4 text-sm text-on-surface-variant whitespace-nowrap">
                             {formatDate(pedido.created_at)}
@@ -1057,7 +1061,7 @@ export default function Administracion() {
                   <table className="w-full text-left border-collapse min-w-[700px]">
                     <thead>
                       <tr className="bg-surface-container-high border-b border-outline-variant">
-                        {['Cliente', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante'].map((h) => (
+                        {['Cliente', 'Ref.', 'Monto', 'Sede', 'Fecha / Hora', 'Estado', 'Comprobante'].map((h) => (
                           <th key={h} className={`px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest whitespace-nowrap ${h === 'Comprobante' ? 'text-center' : 'text-left'}`}>
                             {h}
                           </th>
@@ -1093,6 +1097,12 @@ export default function Administracion() {
                           <td className="px-6 py-4 text-sm font-medium text-primary whitespace-nowrap">
                             ${Number(pedido.total).toFixed(2)}
                           </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-surface-container-highest text-xs font-medium text-on-surface-variant">
+                              <span className="material-symbols-outlined text-[12px]">store</span>
+                              {getSedeName(pedido.sede_id)}
+                            </span>
+                          </td>
                           <td className="px-6 py-4 text-sm text-on-surface-variant whitespace-nowrap">
                             {formatDate(pedido.created_at)}
                           </td>
@@ -1123,7 +1133,186 @@ export default function Administracion() {
             </section>
           )}
 
-          {/* ── Sección 4: Configuración ─────────────────────────────── */}
+          {/* ── Sección 5: Sedes ──────────────────────────────────────────── */}
+          {activeTab === 'Sedes' && (
+            <section id="sedes">
+              <div className="flex justify-between items-end mb-6">
+                <div>
+                  <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Inventario por Sedes</h3>
+                  <p className="text-on-surface-variant text-sm font-medium">Stock independiente por punto de venta</p>
+                </div>
+                <button
+                  className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
+                  onClick={() => setAddSedeModalOpen(true)}
+                >
+                  <span className="material-symbols-outlined">add</span>
+                  <span className="hidden md:inline">Nueva Sede</span>
+                </button>
+              </div>
+
+              {loadingSedes ? (
+                <div className="space-y-3">
+                  {[1, 2].map(n => <div key={n} className="h-12 bg-surface-container rounded-xl animate-pulse border border-outline-variant" />)}
+                </div>
+              ) : sedes.length === 0 ? (
+                <div className="text-center py-16 bg-surface-container rounded-xl border border-outline-variant">
+                  <span className="material-symbols-outlined text-5xl text-on-surface-variant block mb-3">store</span>
+                  <p className="text-on-surface-variant text-sm font-medium">No hay sedes registradas.</p>
+                  <p className="text-on-surface-variant text-xs mt-1">Crea la primera sede con el botón de arriba.</p>
+                </div>
+              ) : (
+                <>
+                  {/* Tabs de Sedes */}
+                  <div className="flex gap-2 flex-wrap mb-6 p-1.5 bg-surface-container rounded-xl border border-outline-variant">
+                    {sedes.map(sede => (
+                      <button
+                        key={sede.id}
+                        onClick={() => setSelectedSedeTab(sede.id)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                          selectedSedeTab === sede.id
+                            ? 'bg-primary text-on-primary shadow-md scale-[1.02]'
+                            : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-highest'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined text-[16px]">store</span>
+                        {sede.nombre}
+                        {!sede.activa && (
+                          <span className="text-[9px] uppercase bg-error/20 text-error px-1 py-0.5 rounded font-bold">Inactiva</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Contenido de la sede seleccionada */}
+                  {selectedSedeTab && (() => {
+                    const sedeActual = sedes.find(s => s.id === selectedSedeTab);
+                    // Total unidades = suma de todo el stock de esta sede
+                    const totalUnidades = inventarioSedes
+                      .filter(i => i.sede_id === selectedSedeTab)
+                      .reduce((sum, i) => sum + i.stock, 0);
+                    // Productos con stock bajo = productos del catálogo con stock <= 10 en esta sede
+                    const bajosEnStock = inventario.filter(p => {
+                      const s = inventarioSedes.find(i => i.sede_id === selectedSedeTab && i.producto_id === p.id)?.stock ?? 0;
+                      return s <= 10;
+                    }).length;
+
+                    return (
+                      <div className="space-y-4">
+                        {/* Info bar de la sede */}
+                        <div className="flex flex-wrap justify-between items-center gap-4 p-4 bg-surface-container border border-outline-variant rounded-xl">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <span className="material-symbols-outlined text-primary">store</span>
+                            </div>
+                            <div>
+                              <p className="font-bold text-on-surface">{sedeActual?.nombre}</p>
+                              <p className="text-xs text-on-surface-variant">
+                                {inventario.length} productos · {totalUnidades} unidades en sede
+                                {bajosEnStock > 0 && <span className="text-error ml-2">· ⚠ {bajosEnStock} bajo stock</span>}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleToggleSede(sedeActual.id, sedeActual.activa)}
+                              className={`text-xs px-3 py-1.5 rounded-lg border font-bold transition-all active:scale-95 ${
+                                sedeActual?.activa
+                                  ? 'bg-green-500/10 text-green-400 border-green-500/30 hover:bg-green-500/20'
+                                  : 'bg-error/10 text-error border-error/30 hover:bg-error/20'
+                              }`}
+                            >
+                              <span className="material-symbols-outlined text-[14px] align-middle mr-1">
+                                {sedeActual?.activa ? 'toggle_on' : 'toggle_off'}
+                              </span>
+                              {sedeActual?.activa ? 'Activa' : 'Inactiva'}
+                            </button>
+                          </div>
+                        </div>
+
+
+                        {/* Grid: TODOS los productos del catálogo por sabor */}
+                        {loadingInv ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            {[1,2,3,4].map(n => <div key={n} className="h-48 bg-surface-container rounded-xl animate-pulse border border-outline-variant" />)}
+                          </div>
+                        ) : inventario.length === 0 ? (
+                          <div className="text-center py-12 bg-surface-container rounded-xl border border-dashed border-outline-variant">
+                            <span className="material-symbols-outlined text-4xl text-on-surface-variant block mb-2">inventory_2</span>
+                            <p className="text-on-surface-variant text-sm font-medium">No hay productos en el catálogo.</p>
+                            <p className="text-xs text-on-surface-variant mt-1">Añade sabores desde el tab Inventario primero.</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                            {getInventarioAgrupado().map(grupo => (
+                              <div
+                                key={grupo.sabor}
+                                className="bento-card bg-surface-container border border-outline-variant rounded-xl p-4 flex flex-col gap-4"
+                              >
+                                <h4 className="font-semibold text-lg text-primary">{grupo.sabor}</h4>
+                                <div className="flex flex-col gap-3">
+                                  {grupo.variantes.map(item => {
+                                    const stockSede = inventarioSedes.find(
+                                      i => i.sede_id === selectedSedeTab && i.producto_id === item.id
+                                    )?.stock ?? 0;
+                                    return (
+                                      <div key={item.id} className="bg-surface-container-low border border-outline-variant rounded-lg p-3">
+                                        <div className="flex justify-between items-center mb-2">
+                                          <div>
+                                            <span className="text-sm font-bold text-on-surface">{item.presentacion}</span>
+                                            <span className="text-xs text-on-surface-variant ml-2">${Number(item.precio).toFixed(2)}</span>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-4 mb-3">
+                                          <div className="flex-1">
+                                            <p className="text-[10px] text-on-surface-variant uppercase font-bold">Stock Sede</p>
+                                            <div className="text-3xl font-extrabold text-on-surface leading-none tabular-nums tracking-tighter">
+                                              {stockSede}
+                                            </div>
+                                          </div>
+                                          <div className="flex gap-1">
+                                            <button
+                                              className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-primary hover:text-on-primary transition-all active:scale-90 border border-outline-variant"
+                                              onClick={() => updateStockSede(selectedSedeTab, item.id, 1)}
+                                            >
+                                              <span className="material-symbols-outlined text-sm">add</span>
+                                            </button>
+                                            <button
+                                              className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-lg text-primary hover:bg-error hover:text-on-error transition-all active:scale-90 border border-outline-variant disabled:opacity-40"
+                                              onClick={() => updateStockSede(selectedSedeTab, item.id, -1)}
+                                              disabled={stockSede === 0}
+                                            >
+                                              <span className="material-symbols-outlined text-sm">remove</span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                        <div className="flex justify-between items-center gap-3">
+                                          <div className="flex-1 h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+                                            <div
+                                              className={`h-full transition-all duration-500 ${getStockColor(stockSede)}`}
+                                              style={{ width: getStockWidth(stockSede) }}
+                                            />
+                                          </div>
+                                          <span className={`text-[10px] font-bold ${stockSede <= 10 ? 'text-error' : stockSede <= 30 ? 'text-tertiary' : 'text-primary'}`}>
+                                            {stockSede <= 10 ? 'BAJO' : stockSede <= 30 ? 'MEDIO' : 'OK'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </>
+              )}
+            </section>
+          )}
+
+          {/* ── Sección 4: Configuración ────────────────────────────────────────── */}
           {activeTab === 'Settings' && (
             <section id="settings" className="max-w-2xl bg-surface-container border border-outline-variant rounded-xl p-6">
               <div className="mb-6">
@@ -1461,6 +1650,107 @@ export default function Administracion() {
                   ) : (
                     'Guardar'
                   )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Crear Nueva Sede */}
+      {addSedeModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4"
+          onClick={() => setAddSedeModalOpen(false)}
+        >
+          <div
+            className="bg-surface-container border border-outline-variant rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-outline-variant flex justify-between items-center">
+              <div>
+                <h3 className="font-semibold text-xl text-on-surface">Nueva Sede</h3>
+                <p className="text-xs text-on-surface-variant mt-0.5">Añade un nuevo punto de venta</p>
+              </div>
+              <button className="text-on-surface-variant hover:text-primary transition-colors" onClick={() => setAddSedeModalOpen(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleAddSede} className="p-6 space-y-4">
+              <div>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Nombre de la Sede</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="Ej. Sede Centro"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                  value={newSede.nombre}
+                  onChange={e => setNewSede({ nombre: e.target.value })}
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" className="flex-1 py-3 text-sm font-medium text-on-surface-variant border border-outline-variant rounded-lg hover:bg-surface-container-highest transition-all" onClick={() => setAddSedeModalOpen(false)}>Cancelar</button>
+                <button type="submit" disabled={savingFlavor} className="flex-1 py-3 bg-primary text-on-primary rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-all">
+                  {savingFlavor ? <><span className="material-symbols-outlined animate-spin">sync</span> Guardando...</> : 'Crear Sede'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Agregar Producto a Sede */}
+      {addProductoSedeModalOpen && currentSedeForProduct && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4"
+          onClick={() => setAddProductoSedeModalOpen(false)}
+        >
+          <div
+            className="bg-surface-container border border-outline-variant rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-outline-variant flex justify-between items-center">
+              <div>
+                <h3 className="font-semibold text-xl text-on-surface">Agregar Producto</h3>
+                <p className="text-xs text-on-surface-variant mt-0.5">Para: <strong className="text-primary">{sedes.find(s => s.id === currentSedeForProduct)?.nombre}</strong></p>
+              </div>
+              <button className="text-on-surface-variant hover:text-primary transition-colors" onClick={() => setAddProductoSedeModalOpen(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleAddProductoSede} className="p-6 space-y-4">
+              <div>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Producto</label>
+                <select
+                  required
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                  value={newProductoSede.producto_id}
+                  onChange={e => setNewProductoSede({ ...newProductoSede, producto_id: e.target.value })}
+                >
+                  <option value="">Selecciona un producto...</option>
+                  {inventario
+                    .filter(p => !inventarioSedes.some(is => is.sede_id === currentSedeForProduct && is.producto_id === p.id))
+                    .map(p => (
+                      <option key={p.id} value={p.id}>{p.sabor} — {p.presentacion}</option>
+                    ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-on-surface-variant block mb-1">Stock Inicial</label>
+                <input
+                  required
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
+                  value={newProductoSede.stock}
+                  onChange={e => setNewProductoSede({ ...newProductoSede, stock: e.target.value })}
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button type="button" className="flex-1 py-3 text-sm font-medium text-on-surface-variant border border-outline-variant rounded-lg hover:bg-surface-container-highest transition-all" onClick={() => setAddProductoSedeModalOpen(false)}>Cancelar</button>
+                <button type="submit" disabled={savingFlavor} className="flex-1 py-3 bg-primary text-on-primary rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-all">
+                  {savingFlavor ? <><span className="material-symbols-outlined animate-spin">sync</span> Guardando...</> : 'Agregar'}
                 </button>
               </div>
             </form>

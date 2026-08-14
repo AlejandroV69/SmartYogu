@@ -6,6 +6,8 @@ export default function ReportarPago() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [bcvRate, setBcvRate] = useState(null);
   const [copied, setCopied] = useState('');
+  const [sedes, setSedes] = useState([]);
+  const [loadingSedes, setLoadingSedes] = useState(true);
 
   const [formData, setFormData] = useState({
     nombre: '',
@@ -13,6 +15,7 @@ export default function ReportarPago() {
     telefono: '',
     referencia: '',
     monto: '',
+    sede_id: '',
   });
 
   const [file, setFile] = useState(null);
@@ -41,6 +44,21 @@ export default function ReportarPago() {
     // Escuchar actualizaciones desde el panel admin en otras pestañas
     window.addEventListener('storage', loadConfig);
     return () => window.removeEventListener('storage', loadConfig);
+  }, []);
+
+  // Cargar sedes activas
+  useEffect(() => {
+    async function fetchSedes() {
+      setLoadingSedes(true);
+      const { data } = await supabase
+        .from('sedes')
+        .select('id, nombre')
+        .eq('activa', true)
+        .order('nombre');
+      if (data) setSedes(data);
+      setLoadingSedes(false);
+    }
+    fetchSedes();
   }, []);
 
   useEffect(() => {
@@ -185,7 +203,8 @@ export default function ReportarPago() {
           estado: 'Pago por Verificar',
           comprobante_url: comprobanteUrl,
           tipo_entrega: 'Reporte Directo',
-          direccion_envio: 'N/A (Pago Directo)'
+          direccion_envio: 'N/A (Pago Directo)',
+          sede_id: formData.sede_id ? parseInt(formData.sede_id, 10) : null,
         }]);
 
       if (insertError) {
@@ -203,7 +222,7 @@ export default function ReportarPago() {
       await sendTelegramPhoto(fileToUpload, caption);
       
       setDone(true);
-      setFormData({ nombre: '', cedula: '', telefono: '', referencia: '', monto: '' });
+      setFormData({ nombre: '', cedula: '', telefono: '', referencia: '', monto: '', sede_id: '' });
       setFile(null);
       setFileName('');
       
@@ -216,7 +235,7 @@ export default function ReportarPago() {
     }
   };
 
-  const isFormValid = formData.nombre && formData.cedula && formData.telefono && formData.referencia && formData.monto && file;
+  const isFormValid = formData.nombre && formData.cedula && formData.telefono && formData.referencia && formData.monto && formData.sede_id && file;
 
   return (
     <div className="min-h-screen bg-surface text-on-surface">
@@ -444,6 +463,26 @@ export default function ReportarPago() {
                 value={formData.referencia}
                 onChange={handleChange}
               />
+            </div>
+
+            <div>
+              <label className="text-on-surface text-xs font-bold uppercase tracking-widest mb-1 block">Sede de Entrega</label>
+              {loadingSedes ? (
+                <div className="h-12 bg-surface-container-low border-2 border-outline-variant rounded-xl animate-pulse" />
+              ) : (
+                <select
+                  name="sede_id"
+                  required
+                  className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl px-4 py-3 focus:border-primary focus:outline-none text-on-surface transition-colors"
+                  value={formData.sede_id}
+                  onChange={handleChange}
+                >
+                  <option value="">Selecciona una sede...</option>
+                  {sedes.map(s => (
+                    <option key={s.id} value={s.id}>{s.nombre}</option>
+                  ))}
+                </select>
+              )}
             </div>
 
           </div>
