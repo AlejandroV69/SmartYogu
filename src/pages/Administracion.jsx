@@ -828,22 +828,19 @@ export default function Administracion() {
                 </p>
               </div>
 
-              {/* KPI: Alertas de Stock */}
+              {/* KPI: Stock Total Global */}
               <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
                 <div>
                   <div className="flex justify-between items-start text-on-surface-variant">
-                    <span className="text-xs uppercase font-bold tracking-wider">Alertas de Stock</span>
-                    <span className="material-symbols-outlined text-error">warning</span>
+                    <span className="text-xs uppercase font-bold tracking-wider">Stock Total Global</span>
+                    <span className="material-symbols-outlined text-primary">inventory_2</span>
                   </div>
                   <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
-                    {inventario.filter(item => {
-                      const total = getStockTotal(item.id);
-                      return total > 0 && total <= 10;
-                    }).length}
+                    {inventarioSedes.reduce((sum, i) => sum + (i.stock || 0), 0)}
                   </h3>
                 </div>
                 <p className="text-[11px] text-on-surface-variant mt-3">
-                  Productos activos con stock bajo (1 a 10 unidades)
+                  Suma total de unidades en todas las sedes
                 </p>
               </div>
             </section>
