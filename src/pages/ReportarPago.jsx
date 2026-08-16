@@ -11,6 +11,7 @@ export default function ReportarPago() {
     nombre: '',
   });
 
+  const [montoUSD, setMontoUSD] = useState('');
   const [file, setFile] = useState(null);
   const [fileName, setFileName] = useState('');
 
@@ -63,7 +64,14 @@ export default function ReportarPago() {
   const copyAllDetails = () => {
     const cleanCedula = pagoMovilConfig.cedula.replace(/\D/g, '');
     const cleanTelefono = pagoMovilConfig.telefono.replace(/\D/g, '');
-    const textToCopy = `Banco: ${pagoMovilConfig.banco}\nCédula: ${cleanCedula}\nTeléfono: ${cleanTelefono}`;
+    const bBs = montoUSD && bcvRate ? (parseFloat(montoUSD) * bcvRate).toFixed(2) : '';
+    
+    let textToCopy = `Banco: ${pagoMovilConfig.banco}\nCédula: ${cleanCedula}\nTeléfono: ${cleanTelefono}`;
+    if (bBs) {
+      textToCopy += `\nMonto: ${bBs} Bs`;
+    } else if (montoUSD) {
+      textToCopy += `\nMonto: $${montoUSD} USD`;
+    }
     copyToClipboard(textToCopy, 'all');
   };
 
@@ -123,7 +131,7 @@ export default function ReportarPago() {
           cedula: 'N/A',
           telefono: 'N/A',
           numero_transaccion: 'N/A',
-          total: 0,
+          total: montoUSD ? parseFloat(montoUSD) : 0,
           estado: 'Pago por Verificar',
           comprobante_url: comprobanteUrl,
           tipo_entrega: 'Reporte Directo',
@@ -135,13 +143,17 @@ export default function ReportarPago() {
       }
 
       // 3. Notificar a Telegram
-      const caption = `💸 <b>¡NUEVO REPORTE DE PAGO!</b>\n\n` +
+      let caption = `💸 <b>¡NUEVO REPORTE DE PAGO!</b>\n\n` +
         `👤 <b>Cliente:</b> ${formData.nombre}\n`;
+      if (montoUSD) {
+        caption += `💰 <b>Monto:</b> $${montoUSD}\n`;
+      }
 
       await sendTelegramPhoto(file, caption);
       
       setDone(true);
       setFormData({ nombre: '' });
+      setMontoUSD('');
       setFile(null);
       setFileName('');
       
@@ -261,7 +273,7 @@ export default function ReportarPago() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Bank Details */}
+          {/* Bank Details & Calculator */}
           <div className="bg-surface-container p-6 rounded-xl border border-primary/20">
             <h4 className="text-primary text-xs font-bold mb-4 uppercase tracking-widest">
               Datos para Pago Móvil
@@ -286,7 +298,7 @@ export default function ReportarPago() {
                   </button>
                 </div>
               </div>
-              <div className="flex justify-between items-center pb-1">
+              <div className="flex justify-between items-center border-b border-outline-variant pb-3">
                 <span className="text-on-surface-variant text-sm font-medium">Teléfono</span>
                 <div className="flex items-center gap-2">
                   <span className="text-on-surface font-bold">{pagoMovilConfig.telefono}</span>
@@ -301,6 +313,28 @@ export default function ReportarPago() {
                   </button>
                 </div>
               </div>
+              <div className="flex justify-between items-center border-b border-outline-variant pb-3">
+                <span className="text-on-surface-variant text-sm font-medium">Monto (USD)</span>
+                <div className="relative w-36">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant font-bold text-sm">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-7 pr-3 py-1.5 text-right focus:border-primary focus:outline-none text-on-surface transition-colors font-bold text-sm"
+                    value={montoUSD}
+                    onChange={(e) => setMontoUSD(e.target.value)}
+                  />
+                </div>
+              </div>
+              {montoUSD && bcvRate ? (
+                <div className="flex justify-between items-center pb-1">
+                  <span className="text-on-surface-variant text-sm font-medium">Monto en Bs</span>
+                  <span className="text-primary font-bold text-right text-sm">
+                    {(parseFloat(montoUSD) * bcvRate).toFixed(2)} Bs
+                  </span>
+                </div>
+              ) : null}
             </div>
             <div className="mt-4 pt-4 border-t border-outline-variant">
               <button
