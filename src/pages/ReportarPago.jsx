@@ -6,16 +6,9 @@ export default function ReportarPago() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [bcvRate, setBcvRate] = useState(null);
   const [copied, setCopied] = useState('');
-  const [sedes, setSedes] = useState([]);
-  const [loadingSedes, setLoadingSedes] = useState(true);
 
   const [formData, setFormData] = useState({
     nombre: '',
-    cedula: '',
-    telefono: '',
-    referencia: '',
-    monto: '',
-    sede_id: '',
   });
 
   const [file, setFile] = useState(null);
@@ -46,21 +39,6 @@ export default function ReportarPago() {
     return () => window.removeEventListener('storage', loadConfig);
   }, []);
 
-  // Cargar sedes activas
-  useEffect(() => {
-    async function fetchSedes() {
-      setLoadingSedes(true);
-      const { data } = await supabase
-        .from('sedes')
-        .select('id, nombre')
-        .eq('activa', true)
-        .order('nombre');
-      if (data) setSedes(data);
-      setLoadingSedes(false);
-    }
-    fetchSedes();
-  }, []);
-
   useEffect(() => {
     async function fetchBCV() {
       try {
@@ -85,14 +63,7 @@ export default function ReportarPago() {
   const copyAllDetails = () => {
     const cleanCedula = pagoMovilConfig.cedula.replace(/\D/g, '');
     const cleanTelefono = pagoMovilConfig.telefono.replace(/\D/g, '');
-    const bBs = formData.monto && bcvRate ? (parseFloat(formData.monto) * bcvRate).toFixed(2) : '';
-    
-    let textToCopy = `Banco: ${pagoMovilConfig.banco}\nCédula: ${cleanCedula}\nTeléfono: ${cleanTelefono}`;
-    if (bBs) {
-      textToCopy += `\nMonto: ${bBs} Bs`;
-    } else if (formData.monto) {
-      textToCopy += `\nMonto: $${formData.monto} USD`;
-    }
+    const textToCopy = `Banco: ${pagoMovilConfig.banco}\nCédula: ${cleanCedula}\nTeléfono: ${cleanTelefono}`;
     copyToClipboard(textToCopy, 'all');
   };
 
@@ -114,50 +85,6 @@ export default function ReportarPago() {
     setFileName('');
   };
 
-  // Función auxiliar para comprimir la imagen en el cliente antes de subir
-  const compressImage = (fileInstance) => {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(fileInstance);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target.result;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const MAX_WIDTH = 1000; // Limitar ancho para que pese poquísimo
-          let width = img.width;
-          let height = img.height;
-
-          if (width > MAX_WIDTH) {
-            height = Math.round((height * MAX_WIDTH) / width);
-            width = MAX_WIDTH;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Convertir a blob JPEG con calidad reducida (70%)
-          canvas.toBlob((blob) => {
-            if (blob) {
-              const compressedFile = new File([blob], fileInstance.name, {
-                type: 'image/jpeg',
-                lastModified: Date.now(),
-              });
-              resolve(compressedFile);
-            } else {
-              resolve(fileInstance); // fallback
-            }
-          }, 'image/jpeg', 0.7);
-        };
-        img.onerror = () => resolve(fileInstance);
-      };
-      reader.onerror = () => resolve(fileInstance);
-    });
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!file) {
@@ -168,18 +95,15 @@ export default function ReportarPago() {
     setError(null);
 
     try {
-      // 0. Comprimir imagen en el cliente para subida ultra rápida
-      const fileToUpload = await compressImage(file);
-
       let comprobanteUrl = null;
 
       // 1. Subir archivo a Supabase Storage
-      const ext = fileToUpload.name.split('.').pop();
+      const ext = file.name.split('.').pop();
       const filePath = `reporte_directo_${Date.now()}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from('comprobantes')
-        .upload(filePath, fileToUpload, { upsert: true });
+        .upload(filePath, file, { upsert: true });
 
       if (uploadError) {
         console.warn('No se pudo subir el archivo al Storage:', uploadError.message);
@@ -196,33 +120,28 @@ export default function ReportarPago() {
         .from('pedidos')
         .insert([{
           cliente_nombre: formData.nombre,
-          cedula: formData.cedula,
-          telefono: formData.telefono,
-          numero_transaccion: formData.referencia,
-          total: parseFloat(formData.monto),
+          cedula: 'N/A',
+          telefono: 'N/A',
+          numero_transaccion: 'N/A',
+          total: 0,
           estado: 'Pago por Verificar',
           comprobante_url: comprobanteUrl,
           tipo_entrega: 'Reporte Directo',
           direccion_envio: 'N/A (Pago Directo)',
-          sede_id: formData.sede_id ? parseInt(formData.sede_id, 10) : null,
         }]);
 
       if (insertError) {
         throw new Error(`Error registrando el pago en el sistema: ${insertError.message}`);
       }
 
-      // 3. Notificar a Telegram con la foto comprimida
+      // 3. Notificar a Telegram
       const caption = `💸 <b>¡NUEVO REPORTE DE PAGO!</b>\n\n` +
-        `👤 <b>Cliente:</b> ${formData.nombre}\n` +
-        `🪪 <b>Cédula/RIF:</b> ${formData.cedula}\n` +
-        `📱 <b>Teléfono:</b> ${formData.telefono}\n` +
-        `💳 <b>Ref. Pago:</b> ${formData.referencia}\n` +
-        `💰 <b>Monto:</b> $${formData.monto}\n`;
+        `👤 <b>Cliente:</b> ${formData.nombre}\n`;
 
-      await sendTelegramPhoto(fileToUpload, caption);
+      await sendTelegramPhoto(file, caption);
       
       setDone(true);
-      setFormData({ nombre: '', cedula: '', telefono: '', referencia: '', monto: '', sede_id: '' });
+      setFormData({ nombre: '' });
       setFile(null);
       setFileName('');
       
@@ -235,7 +154,7 @@ export default function ReportarPago() {
     }
   };
 
-  const isFormValid = formData.nombre && formData.cedula && formData.telefono && formData.referencia && formData.monto && formData.sede_id && file;
+  const isFormValid = formData.nombre.trim() !== '' && file;
 
   return (
     <div className="min-h-screen bg-surface text-on-surface">
@@ -253,6 +172,9 @@ export default function ReportarPago() {
             <img src="/favicon.png" alt="THÖRGURT Logo" className="w-8 h-8 object-contain drop-shadow-md" />
             <h1 className="font-bold text-xl text-primary tracking-tight">THÖRGURT</h1>
           </div>
+        </div>
+        <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant">
+          <span className="material-symbols-outlined text-primary">account_circle</span>
         </div>
       </header>
 
@@ -279,6 +201,24 @@ export default function ReportarPago() {
           <a href="/" className="flex items-center gap-3 p-4 rounded-xl bg-primary/10 text-primary font-bold border border-primary/20">
             <span className="material-symbols-outlined">receipt_long</span>
             Reportar Pago
+          </a>
+          <a 
+            href="https://www.instagram.com/thorgurt.ve/" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="flex items-center gap-3 p-4 rounded-xl text-on-surface hover:bg-gradient-to-r hover:from-purple-600/20 hover:to-pink-600/20 transition-all font-medium border border-transparent hover:border-pink-500/30"
+          >
+            <span className="material-symbols-outlined text-pink-400">photo_camera</span>
+            <span>Síguenos en Instagram</span>
+          </a>
+          <a 
+            href={`https://wa.me/58${pagoMovilConfig.telefono.replace(/\D/g, '').replace(/^0/, '')}`}
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="flex items-center gap-3 p-4 rounded-xl text-on-surface hover:bg-green-500/10 transition-all font-medium border border-transparent hover:border-green-500/30"
+          >
+            <span className="material-symbols-outlined text-green-400">chat</span>
+            <span>Escríbenos al WhatsApp</span>
           </a>
           <div className="my-4 border-t border-outline-variant"></div>
           <a href="/login" className="flex items-center gap-3 p-4 rounded-xl text-on-surface-variant hover:bg-surface-container-highest transition-colors font-medium">
@@ -346,7 +286,7 @@ export default function ReportarPago() {
                   </button>
                 </div>
               </div>
-              <div className="flex justify-between items-center border-b border-outline-variant pb-3">
+              <div className="flex justify-between items-center pb-1">
                 <span className="text-on-surface-variant text-sm font-medium">Teléfono</span>
                 <div className="flex items-center gap-2">
                   <span className="text-on-surface font-bold">{pagoMovilConfig.telefono}</span>
@@ -361,41 +301,6 @@ export default function ReportarPago() {
                   </button>
                 </div>
               </div>
-              <div className="flex justify-between items-center border-b border-outline-variant pb-3">
-                <span className="text-on-surface-variant text-sm font-medium">Monto (USD)</span>
-                <div className="relative w-36">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant font-bold text-sm">$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    name="monto"
-                    required
-                    placeholder="0.00"
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-7 pr-3 py-1.5 text-right focus:border-primary focus:outline-none text-on-surface transition-colors font-bold text-sm"
-                    value={formData.monto}
-                    onChange={handleChange}
-                  />
-                </div>
-              </div>
-              {formData.monto && bcvRate ? (
-                <div className="flex justify-between items-center pb-1">
-                  <span className="text-on-surface-variant text-sm font-medium">Monto en Bs</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-primary font-bold text-sm">
-                      {(parseFloat(formData.monto) * bcvRate).toFixed(2)} Bs
-                    </span>
-                    <button
-                      type="button"
-                      className={`transition-all active:scale-90 ${copied === (parseFloat(formData.monto) * bcvRate).toFixed(2) ? 'text-green-400' : 'text-primary'}`}
-                      onClick={() => copyToClipboard((parseFloat(formData.monto) * bcvRate).toFixed(2))}
-                    >
-                      <span className="material-symbols-outlined text-[18px]">
-                        {copied === (parseFloat(formData.monto) * bcvRate).toFixed(2) ? 'check' : 'content_copy'}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-              ) : null}
             </div>
             <div className="mt-4 pt-4 border-t border-outline-variant">
               <button
@@ -427,64 +332,6 @@ export default function ReportarPago() {
                 onChange={handleChange}
               />
             </div>
-            
-            <div>
-              <label className="text-on-surface text-xs font-bold uppercase tracking-widest mb-1 block">Cédula / RIF</label>
-              <input
-                type="text"
-                name="cedula"
-                required
-                className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl px-4 py-3 focus:border-primary focus:outline-none text-on-surface transition-colors"
-                value={formData.cedula}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div>
-              <label className="text-on-surface text-xs font-bold uppercase tracking-widest mb-1 block">Teléfono de contacto</label>
-              <input
-                type="tel"
-                name="telefono"
-                required
-                className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl px-4 py-3 focus:border-primary focus:outline-none text-on-surface transition-colors"
-                value={formData.telefono}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div>
-              <label className="text-on-surface text-xs font-bold uppercase tracking-widest mb-1 block">Número de Referencia</label>
-              <input
-                type="text"
-                name="referencia"
-                required
-                placeholder="Últimos dígitos"
-                className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl px-4 py-3 focus:border-primary focus:outline-none text-on-surface transition-colors"
-                value={formData.referencia}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div>
-              <label className="text-on-surface text-xs font-bold uppercase tracking-widest mb-1 block">Sede de Entrega</label>
-              {loadingSedes ? (
-                <div className="h-12 bg-surface-container-low border-2 border-outline-variant rounded-xl animate-pulse" />
-              ) : (
-                <select
-                  name="sede_id"
-                  required
-                  className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl px-4 py-3 focus:border-primary focus:outline-none text-on-surface transition-colors"
-                  value={formData.sede_id}
-                  onChange={handleChange}
-                >
-                  <option value="">Selecciona una sede...</option>
-                  {sedes.map(s => (
-                    <option key={s.id} value={s.id}>{s.nombre}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-
           </div>
 
           <div className="space-y-4">
@@ -558,6 +405,51 @@ export default function ReportarPago() {
             )}
           </button>
         </form>
+
+        {/* Sección Publicitaria / Redes Sociales */}
+        <div className="mt-8 space-y-3">
+          {/* Card Instagram */}
+          <div className="p-4 bg-gradient-to-r from-purple-900/30 via-pink-900/20 to-orange-900/30 rounded-2xl border border-pink-500/30 flex items-center justify-between gap-4 shadow-lg backdrop-blur-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 flex items-center justify-center text-white shrink-0 shadow-md">
+                <span className="material-symbols-outlined text-xl">photo_camera</span>
+              </div>
+              <div>
+                <p className="font-bold text-on-surface text-sm">¡Síguenos en Instagram!</p>
+                <p className="text-xs text-on-surface-variant font-medium">@thorgurt.ve</p>
+              </div>
+            </div>
+            <a
+              href="https://www.instagram.com/thorgurt.ve/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 bg-gradient-to-r from-pink-500 to-purple-600 text-white text-xs font-bold rounded-xl shadow hover:opacity-90 transition-all active:scale-95 whitespace-nowrap"
+            >
+              Ver Instagram
+            </a>
+          </div>
+
+          {/* Card WhatsApp */}
+          <div className="p-4 bg-gradient-to-r from-emerald-900/30 to-green-900/20 rounded-2xl border border-green-500/30 flex items-center justify-between gap-4 shadow-lg backdrop-blur-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center text-white shrink-0 shadow-md">
+                <span className="material-symbols-outlined text-xl">chat</span>
+              </div>
+              <div>
+                <p className="font-bold text-on-surface text-sm">Escríbenos por WhatsApp</p>
+                <p className="text-xs text-on-surface-variant font-medium">Atención directa</p>
+              </div>
+            </div>
+            <a
+              href={`https://wa.me/58${pagoMovilConfig.telefono.replace(/\D/g, '').replace(/^0/, '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-1.5 bg-green-500 text-white text-xs font-bold rounded-xl shadow hover:bg-green-600 transition-all active:scale-95 whitespace-nowrap"
+            >
+              Escribir
+            </a>
+          </div>
+        </div>
       </main>
     </div>
   );
