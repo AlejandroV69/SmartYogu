@@ -185,9 +185,6 @@ export default function ReportarPago() {
             <h1 className="font-bold text-xl text-primary tracking-tight">THÖRGURT</h1>
           </div>
         </div>
-        <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center overflow-hidden border border-outline-variant">
-          <span className="material-symbols-outlined text-primary">account_circle</span>
-        </div>
       </header>
 
       {/* Sidebar Overlay */}
