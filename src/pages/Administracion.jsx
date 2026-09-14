@@ -521,7 +521,9 @@ export default function Administracion() {
         style={{ padding: '24px 0' }}
       >
         <div className="px-4 mb-8 flex items-center gap-3">
-          <img src="/favicon.png" alt="THÖRGURT Logo" className="w-10 h-10 object-contain drop-shadow-md" />
+          <div className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-700/60 flex items-center justify-center p-1.5 shadow-md shrink-0">
+            <img src="/favicon.png" alt="THÖRGURT Logo" className="w-full h-full object-contain drop-shadow" />
+          </div>
           <h1 className="text-primary tracking-tight font-bold text-2xl">THÖRGURT Admin</h1>
         </div>
         <nav className="flex-1 space-y-1 px-2">

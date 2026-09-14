@@ -181,7 +181,9 @@ export default function ReportarPago() {
             menu
           </button>
           <div className="flex items-center gap-2">
-            <img src="/favicon.png" alt="THÖRGURT Logo" className="w-8 h-8 object-contain drop-shadow-md" />
+            <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/60 flex items-center justify-center p-1 shadow-md shrink-0">
+              <img src="/favicon.png" alt="THÖRGURT Logo" className="w-full h-full object-contain drop-shadow" />
+            </div>
             <h1 className="font-bold text-xl text-primary tracking-tight">THÖRGURT</h1>
           </div>
         </div>
@@ -199,7 +201,9 @@ export default function ReportarPago() {
       <aside className={`fixed top-0 left-0 h-full w-72 bg-surface border-r border-outline-variant z-[70] transform transition-transform duration-300 ease-in-out ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-6 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
           <div className="flex items-center gap-3">
-            <img src="/favicon.png" alt="THÖRGURT Logo" className="w-8 h-8 object-contain" />
+            <div className="w-8 h-8 rounded-lg bg-slate-900 border border-slate-700/60 flex items-center justify-center p-1 shadow-md shrink-0">
+              <img src="/favicon.png" alt="THÖRGURT Logo" className="w-full h-full object-contain" />
+            </div>
             <h2 className="font-bold text-xl text-primary tracking-tight">Menú</h2>
           </div>
           <button type="button" onClick={() => setSidebarOpen(false)} className="text-on-surface-variant hover:text-error transition-colors">

@@ -82,7 +82,7 @@ export default function Login() {
           {/* Header & Logo */}
           <div className="flex flex-col items-center text-center mb-8">
             <div className="relative mb-4">
-              <div className="w-20 h-20 bg-surface-container-high border border-outline-variant rounded-2xl flex items-center justify-center mx-auto shadow-xl p-3 backdrop-blur-sm transition-transform duration-300 hover:scale-105">
+              <div className="w-20 h-20 bg-slate-900 border border-slate-700/60 rounded-2xl flex items-center justify-center mx-auto shadow-xl p-3 backdrop-blur-sm transition-transform duration-300 hover:scale-105">
                 <img src="/favicon.png" alt="THÖRGURT Logo" className="w-full h-full object-contain drop-shadow" />
               </div>
               <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
