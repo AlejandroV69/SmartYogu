@@ -102,3 +102,15 @@ html, body, #root {
   transform: translateY(-2px);
   box-shadow: 0 10px 30px -10px rgba(12, 161, 242, 0.15);
 }
+
+/* Fix browser autofill override (Chrome / Edge / Safari) */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--container-low) inset !important;
+  -webkit-text-fill-color: var(--text-color) !important;
+  caret-color: var(--text-color) !important;
+  border-radius: inherit;
+}
+
