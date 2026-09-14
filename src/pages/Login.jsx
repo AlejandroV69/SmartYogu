@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
@@ -24,109 +25,141 @@ export default function Login() {
       setError('Credenciales inválidas. Verifica tu correo y contraseña.');
       setLoading(false);
     } else {
-      // Éxito: redirigir al panel de admin
-      navigate('/admin');
+      navigate('/');
     }
   };
 
   return (
-    <div 
-      className="relative min-h-screen bg-surface flex items-center justify-center p-4"
-      style={{
-        backgroundImage: 'radial-gradient(circle at 90% 10%, rgba(12,161,242,0.18) 0%, transparent 50%), radial-gradient(circle at 10% 90%, rgba(255,184,115,0.12) 0%, transparent 50%)',
-        backgroundAttachment: 'fixed'
-      }}
-    >
+    <div className="relative min-h-screen w-full bg-slate-950 flex items-center justify-center p-4 overflow-hidden select-none font-sans">
+      {/* Dynamic Background Glowing Orbs */}
+      <div className="absolute top-1/4 -left-20 w-96 h-96 bg-primary/20 rounded-full blur-[120px] pointer-events-none animate-pulse" />
+      <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-blue-600/15 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-cyan-500/10 rounded-full blur-[160px] pointer-events-none" />
+
+      {/* Grid pattern overlay */}
+      <div 
+        className="absolute inset-0 opacity-[0.03] pointer-events-none" 
+        style={{
+          backgroundImage: `radial-gradient(rgba(255, 255, 255, 0.4) 1px, transparent 1px)`,
+          backgroundSize: '24px 24px'
+        }}
+      />
 
       <div className="w-full max-w-md relative z-10">
-        {/* Back button */}
-        <button 
-          onClick={() => navigate('/')}
-          className="mb-6 flex items-center gap-2 text-on-surface-variant hover:text-primary transition-colors active:scale-95 w-fit"
-        >
-          <span className="material-symbols-outlined">arrow_back</span>
-          <span className="font-medium text-sm">Volver al inicio</span>
-        </button>
-
-        <div className="bg-surface-container border border-outline-variant/60 p-8 rounded-3xl shadow-[0_0_60px_rgba(12,161,242,0.15),0_20px_60px_rgba(0,0,0,0.5)]">
-        <div className="text-center mb-8">
-          <div className="w-24 h-24 bg-primary-container/20 text-on-primary-container rounded-[2rem] flex items-center justify-center mx-auto mb-4 shadow-lg border border-primary/20 overflow-hidden">
-            <img src="/favicon.png" alt="THÖRGURT Logo" className="w-16 h-16 object-contain" />
-          </div>
-          <h1 className="text-3xl font-bold text-on-surface tracking-tight">Acceso Privado — THÖRGURT</h1>
-          <p className="text-on-surface-variant text-sm mt-2">
-            Inicia sesión para gestionar THÖRGURT
-          </p>
-        </div>
-
-        {error && (
-          <div className="mb-6 p-4 bg-error-container/30 border border-error/40 rounded-xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
-            <span className="material-symbols-outlined text-error mt-0.5 text-[20px]">warning</span>
-            <p className="text-sm text-error">{error}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleLogin} className="space-y-5">
-          <div>
-            <label className="text-sm font-medium text-on-surface-variant block ml-1 mb-1">
-              Correo Electrónico
-            </label>
-            <div className="relative">
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">
-                mail
+        {/* Main Card */}
+        <div className="bg-slate-900/80 backdrop-blur-2xl border border-slate-800/80 p-8 sm:p-10 rounded-3xl shadow-[0_0_80px_rgba(0,0,0,0.6),0_0_30px_rgba(12,161,242,0.1)] transition-all">
+          
+          {/* Header & Logo */}
+          <div className="text-center mb-8">
+            <div className="relative inline-block mb-4">
+              <div className="w-20 h-20 bg-slate-800/80 border border-slate-700/60 rounded-2xl flex items-center justify-center mx-auto shadow-xl p-3 backdrop-blur-sm group transition-transform duration-300 hover:scale-105">
+                <img src="/favicon.png" alt="THÖRGURT Logo" className="w-full h-full object-contain drop-shadow" />
+              </div>
+              <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-primary border-2 border-slate-900"></span>
               </span>
-              <input
-                type="email"
-                required
-                className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl pl-12 pr-4 py-3 focus:border-primary focus:outline-none transition-all text-on-surface placeholder:text-on-surface-variant/50"
-                placeholder="admin@smartyogu.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
             </div>
+
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold uppercase tracking-widest mb-3">
+              <span className="material-symbols-outlined text-[14px]">inventory_2</span>
+              Control de Inventario
+            </div>
+
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              THÖRGURT
+            </h1>
+            <p className="text-slate-400 text-xs sm:text-sm mt-1.5 font-medium">
+              Ingresa tus credenciales para acceder al sistema
+            </p>
           </div>
 
-          <div>
-            <label className="text-sm font-medium text-on-surface-variant block ml-1 mb-1">
-              Contraseña
-            </label>
-            <div className="relative">
-              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant">
-                key
-              </span>
-              <input
-                type="password"
-                required
-                className="w-full bg-surface-container-low border-2 border-outline-variant rounded-xl pl-12 pr-4 py-3 focus:border-primary focus:outline-none transition-all text-on-surface placeholder:text-on-surface-variant/50"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+          {/* Error alert */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+              <span className="material-symbols-outlined text-red-400 mt-0.5 text-[20px]">warning</span>
+              <p className="text-xs sm:text-sm text-red-300 font-medium leading-relaxed">{error}</p>
             </div>
-          </div>
+          )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className={`w-full py-4 mt-4 rounded-xl font-bold text-lg transition-all duration-150 flex items-center justify-center gap-2 ${
-              loading
-                ? 'bg-primary/50 text-on-primary/50 cursor-not-allowed'
-                : 'bg-primary text-on-primary active:scale-95 shadow-[0_8px_30px_rgba(76,215,246,0.3)] hover:brightness-110'
-            }`}
-          >
-            {loading ? (
-              <>
-                <span className="material-symbols-outlined animate-spin">sync</span>
-                Verificando...
-              </>
-            ) : (
-              <>
-                Entrar al Panel
-                <span className="material-symbols-outlined">arrow_forward</span>
-              </>
-            )}
-          </button>
-        </form>
+          {/* Form */}
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div>
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block ml-1 mb-2">
+                Correo Electrónico
+              </label>
+              <div className="relative group">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors text-[20px]">
+                  mail
+                </span>
+                <input
+                  type="email"
+                  required
+                  className="w-full bg-slate-950/70 border border-slate-800 rounded-xl pl-12 pr-4 py-3.5 text-sm text-white placeholder:text-slate-600 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-all"
+                  placeholder="admin@smartyogu.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block ml-1 mb-2">
+                Contraseña
+              </label>
+              <div className="relative group">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors text-[20px]">
+                  lock
+                </span>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  className="w-full bg-slate-950/70 border border-slate-800 rounded-xl pl-12 pr-12 py-3.5 text-sm text-white placeholder:text-slate-600 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-all"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                  title={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  <span className="material-symbols-outlined text-[20px]">
+                    {showPassword ? 'visibility_off' : 'visibility'}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full py-4 mt-2 rounded-xl font-bold text-sm tracking-wide transition-all duration-200 flex items-center justify-center gap-2 text-white shadow-lg ${
+                loading
+                  ? 'bg-primary/50 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-primary via-blue-500 to-primary bg-[length:200%_auto] hover:bg-[position:right_center] active:scale-[0.98] shadow-primary/25 hover:shadow-primary/40'
+              }`}
+            >
+              {loading ? (
+                <>
+                  <span className="material-symbols-outlined animate-spin text-[18px]">sync</span>
+                  Verificando...
+                </>
+              ) : (
+                <>
+                  Iniciar Sesión
+                  <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          {/* Footer badge */}
+          <div className="mt-8 pt-6 border-t border-slate-800/80 flex items-center justify-center gap-2 text-slate-500 text-xs font-medium">
+            <span className="material-symbols-outlined text-green-500 text-[16px]">verified_user</span>
+            Acceso seguro y cifrado con Supabase
+          </div>
         </div>
       </div>
     </div>
