@@ -18,6 +18,24 @@ export default function Administracion() {
   const [newVariant, setNewVariant] = useState({ presentacion: '', precio: '', stock: '' });
   const [savingFlavor, setSavingFlavor] = useState(false);
 
+  // ── Tema Claro / Oscuro ──────────────────────────────────────────
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('smartyogu_theme') || 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+    }
+    localStorage.setItem('smartyogu_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  };
+
   // ── Configuración de Pago Móvil ──────────────────────────────────
   const [pagoMovilConfig, setPagoMovilConfig] = useState(() => {
     const saved = localStorage.getItem('smartyogu_pagomovil_config');
@@ -584,7 +602,22 @@ export default function Administracion() {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer hover:scale-105 transition-transform overflow-hidden">
+
+            {/* Toggle Tema Claro / Oscuro */}
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container-highest border border-outline-variant text-on-surface hover:text-primary hover:border-primary/50 transition-all active:scale-95 text-xs font-semibold shadow-sm"
+              title={theme === 'light' ? 'Cambiar a Modo Oscuro' : 'Cambiar a Modo Claro'}
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                {theme === 'light' ? 'dark_mode' : 'light_mode'}
+              </span>
+              <span className="hidden sm:inline">
+                {theme === 'light' ? 'Oscuro' : 'Claro'}
+              </span>
+            </button>
+
+            <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center cursor-pointer hover:scale-105 transition-transform overflow-hidden border border-outline-variant">
               {adminUser.avatarUrl ? (
                 <img src={adminUser.avatarUrl} alt={adminUser.name} className="w-full h-full object-cover" />
               ) : (

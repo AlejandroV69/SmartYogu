@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 import { useNavigate } from 'react-router-dom';
 
@@ -9,6 +9,23 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem('smartyogu_theme') || 'dark';
+  });
+
+  useEffect(() => {
+    if (theme === 'light') {
+      document.documentElement.classList.add('light');
+    } else {
+      document.documentElement.classList.remove('light');
+    }
+    localStorage.setItem('smartyogu_theme', theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  };
+
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -31,6 +48,19 @@ export default function Login() {
 
   return (
     <div className="relative min-h-screen w-full bg-background flex items-center justify-center p-4 overflow-hidden select-none font-sans">
+      {/* Theme Toggle Button */}
+      <button
+        onClick={toggleTheme}
+        className="absolute top-6 right-6 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container border border-outline-variant text-on-surface hover:text-primary hover:border-primary/50 transition-all active:scale-95 text-xs font-semibold shadow-md"
+        title={theme === 'light' ? 'Cambiar a Modo Oscuro' : 'Cambiar a Modo Claro'}
+      >
+        <span className="material-symbols-outlined text-[18px]">
+          {theme === 'light' ? 'dark_mode' : 'light_mode'}
+        </span>
+        <span className="hidden sm:inline">
+          {theme === 'light' ? 'Oscuro' : 'Claro'}
+        </span>
+      </button>
       {/* Ambient background glow */}
       <div className="absolute top-1/4 -left-20 w-96 h-96 bg-primary/15 rounded-full blur-[120px] pointer-events-none animate-pulse" />
       <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-primary/10 rounded-full blur-[140px] pointer-events-none" />
