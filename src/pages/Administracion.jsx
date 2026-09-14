@@ -807,7 +807,6 @@ export default function Administracion() {
 
                       if (navigator.clipboard) {
                         navigator.clipboard.writeText(texto);
-                        alert('¡Lista de disponibilidad global copiada al portapapeles!');
                       } else {
                         const ta = document.createElement('textarea');
                         ta.value = texto;
@@ -815,13 +814,14 @@ export default function Administracion() {
                         ta.select();
                         document.execCommand('copy');
                         document.body.removeChild(ta);
-                        alert('¡Lista de disponibilidad copiada!');
                       }
+                      setCopiedKey('share_global');
+                      setTimeout(() => setCopiedKey(''), 2000);
                     }}
                     title="Copiar lista global de productos disponibles"
                   >
-                    <span className="material-symbols-outlined text-[18px]">share</span>
-                    <span className="hidden md:inline">Compartir Disponibilidad</span>
+                    <span className="material-symbols-outlined text-[18px]">{copiedKey === 'share_global' ? 'check' : 'share'}</span>
+                    <span className="hidden md:inline">{copiedKey === 'share_global' ? '¡Copiado!' : 'Compartir Disponibilidad'}</span>
                   </button>
                   <button
                     className="bg-primary text-on-primary px-4 md:px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 active:scale-95 transition-all shadow-lg hover:brightness-110"
@@ -996,7 +996,6 @@ export default function Administracion() {
 
                         if (navigator.clipboard) {
                           navigator.clipboard.writeText(texto);
-                          alert('¡Lista de disponibilidad copiada al portapapeles! Puedes pegarla en WhatsApp.');
                         } else {
                           const ta = document.createElement('textarea');
                           ta.value = texto;
@@ -1004,13 +1003,14 @@ export default function Administracion() {
                           ta.select();
                           document.execCommand('copy');
                           document.body.removeChild(ta);
-                          alert('¡Lista de disponibilidad copiada al portapapeles!');
                         }
+                        setCopiedKey('share_sede');
+                        setTimeout(() => setCopiedKey(''), 2000);
                       }}
                       title="Copiar lista de productos disponibles en esta sede"
                     >
-                      <span className="material-symbols-outlined text-[18px]">share</span>
-                      <span className="hidden md:inline">Compartir Disponibilidad</span>
+                      <span className="material-symbols-outlined text-[18px]">{copiedKey === 'share_sede' ? 'check' : 'share'}</span>
+                      <span className="hidden md:inline">{copiedKey === 'share_sede' ? '¡Copiado!' : 'Compartir Disponibilidad'}</span>
                     </button>
                   )}
                   <button
@@ -1413,19 +1413,18 @@ export default function Administracion() {
                           const cleanTelefono = pagoMovilConfig.telefono.replace(/\D/g, '');
                           const montoBs = montoUSD && bcvRate ? (parseFloat(montoUSD) * bcvRate).toFixed(2) : '0.00';
                           
-                          const texto = `💳 *DATOS DE PAGO MÓVIL - THÖRGURT* 💳\n- - - - - - - - - - - - -\n🏛 *Banco:* ${pagoMovilConfig.banco}\n🪪 *Cédula/RIF:* ${cleanCedula}\n📱 *Teléfono:* ${cleanTelefono}\n\n💵 *Monto en USD:* $${parseFloat(montoUSD || 0).toFixed(2)}\n📊 *Tasa BCV:* ${bcvRate ? Number(bcvRate).toFixed(2) : '—'} Bs/$\n💰 *Total a Transferir:* ${montoBs} Bs\n- - - - - - - - - - - - -\n📲 Envíanos tu comprobante o captura por aquí. ¡Muchas gracias!`;
+                          const texto = `Banco: ${pagoMovilConfig.banco}\nCédula: ${cleanCedula}\nTeléfono: ${cleanTelefono}\nMonto: ${montoBs} Bs`;
 
                           navigator.clipboard.writeText(texto);
                           setCopiedKey('whatsapp');
                           setTimeout(() => setCopiedKey(''), 2000);
-                          alert('¡Plantilla completa copiada al portapapeles! Lista para pegar en WhatsApp.');
                         }}
                         className="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2.5 rounded-lg text-sm flex items-center gap-2 transition-all active:scale-95 shadow-md"
                       >
                         <span className="material-symbols-outlined text-sm">
                           {copiedKey === 'whatsapp' ? 'check' : 'content_copy'}
                         </span>
-                        {copiedKey === 'whatsapp' ? '¡Copiado!' : 'Copiar para WhatsApp'}
+                        {copiedKey === 'whatsapp' ? '¡Copiado!' : 'Copiar para WhatsApp / Banco'}
                       </button>
                     </div>
                   </div>
@@ -1454,8 +1453,9 @@ export default function Administracion() {
                       
                       setTimeout(() => {
                         setSavingConfig(false);
-                        alert('Datos de Pago Móvil guardados exitosamente.');
-                      }, 400);
+                        setCopiedKey('config_saved');
+                        setTimeout(() => setCopiedKey(''), 2500);
+                      }, 300);
                     }}
                     className="space-y-4 pt-2"
                   >
@@ -1494,10 +1494,16 @@ export default function Administracion() {
                       <button
                         type="submit"
                         disabled={savingConfig}
-                        className="w-full py-3 bg-primary text-on-primary rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer active:scale-95 shadow-md hover:brightness-110"
+                        className={`w-full py-3 rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer active:scale-95 shadow-md ${
+                          copiedKey === 'config_saved'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-primary text-on-primary hover:brightness-110'
+                        }`}
                       >
                         {savingConfig ? (
                           <><span className="material-symbols-outlined animate-spin text-sm">sync</span> Guardando...</>
+                        ) : copiedKey === 'config_saved' ? (
+                          <><span className="material-symbols-outlined text-sm">check</span> ¡Guardado exitosamente!</>
                         ) : (
                           'Guardar Cambios'
                         )}
