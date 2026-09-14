@@ -712,8 +712,10 @@ export default function Administracion() {
 
           {/* KPIs por Sede */}
           {activeTab === 'Dashboard' && sedes.length > 0 && (
-            <section>
-              <h3 className="font-semibold text-base text-on-surface-variant uppercase tracking-wider mb-3">Stock por Sede</h3>
+            <section className="space-y-4">
+              <h3 className="font-extrabold text-sm md:text-base text-on-surface uppercase tracking-wider">
+                Stock por Sede
+              </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {sedes.map(sede => {
                   const totalUnidadesSede = inventarioSedes
@@ -724,56 +726,70 @@ export default function Administracion() {
                     return s > 0 && s <= 10;
                   }).length;
                   const productosCargados = inventarioSedes.filter(i => i.sede_id === sede.id && i.stock > 0).length;
+                  const porcentajeStock = inventario.length > 0 ? Math.min(100, Math.round((productosCargados / inventario.length) * 100)) : 0;
+
                   return (
                     <div
                       key={sede.id}
-                      className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col gap-3 cursor-pointer hover:border-primary/40 hover:bg-surface-container-high transition-all"
+                      className="group bg-surface-container border border-outline-variant rounded-2xl p-5 flex flex-col justify-between gap-4 cursor-pointer hover:border-primary/50 hover:bg-surface-container-high transition-all shadow-sm"
                       onClick={() => { setSelectedSedeTab(sede.id); setActiveTab('Sedes'); }}
                     >
+                      {/* Top Bar: Icon + Name + Badge */}
                       <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                            <span className="material-symbols-outlined text-primary text-[18px]">store</span>
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                            <span className="material-symbols-outlined text-primary text-[20px]">store</span>
                           </div>
                           <div>
-                            <p className="font-bold text-on-surface text-sm">{sede.nombre}</p>
-                            <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${
-                              sede.activa ? 'bg-green-500/15 text-green-400' : 'bg-error/15 text-error'
-                            }`}>{sede.activa ? 'Activa' : 'Inactiva'}</span>
+                            <h4 className="font-bold text-on-surface text-base leading-snug">{sede.nombre}</h4>
+                            <span className={`inline-block text-[9px] uppercase font-extrabold tracking-wider px-2 py-0.5 rounded-md mt-0.5 ${
+                              sede.activa ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-error/15 text-error border border-error/30'
+                            }`}>
+                              {sede.activa ? 'ACTIVA' : 'INACTIVA'}
+                            </span>
                           </div>
                         </div>
+
                         {productosBajos > 0 && (
-                          <span className="text-[10px] bg-error/10 text-error border border-error/20 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[12px]">warning</span>
-                            {productosBajos} bajo
-                          </span>
+                          <div className="px-2.5 py-1 rounded-full bg-surface-container-highest border border-outline-variant text-[11px] font-bold text-on-surface flex items-center gap-1.5 shadow-xs">
+                            <span className="material-symbols-outlined text-amber-400 text-[14px]">warning</span>
+                            <span>{productosBajos} bajo</span>
+                          </div>
                         )}
                       </div>
-                      <div className="flex items-baseline justify-between">
+
+                      {/* Numbers Row */}
+                      <div className="flex items-end justify-between pt-1">
                         <div>
-                          <p className="text-[10px] text-on-surface-variant uppercase font-bold">Stock Total</p>
+                          <p className="text-[10px] text-on-surface-variant uppercase font-bold tracking-wider mb-1">Stock Total</p>
                           <div className="flex items-baseline gap-1.5">
-                            <span className="text-3xl font-extrabold text-on-surface tabular-nums">{totalUnidadesSede}</span>
+                            <span className="text-3xl font-black text-on-surface tabular-nums leading-none">{totalUnidadesSede}</span>
                             <span className="text-xs text-on-surface-variant font-medium">unidades</span>
                           </div>
                         </div>
+
                         <div className="text-right">
-                          <p className="text-[10px] text-on-surface-variant uppercase font-bold">Variantes</p>
+                          <p className="text-[10px] text-on-surface-variant uppercase font-bold tracking-wider mb-1">Variantes</p>
                           <p className="text-sm font-bold text-on-surface tabular-nums">
-                            {productosCargados} <span className="text-xs text-on-surface-variant font-normal">de {inventario.length}</span>
+                            <span className="text-base font-extrabold">{productosCargados}</span>
+                            <span className="text-xs text-on-surface-variant font-normal ml-1">de {inventario.length}</span>
                           </p>
                         </div>
                       </div>
-                      <div className="h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+
+                      {/* Progress Bar */}
+                      <div className="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-primary rounded-full transition-all duration-500"
-                          style={{ width: inventario.length > 0 ? `${Math.min(100, (productosCargados / inventario.length) * 100)}%` : '0%' }}
+                          className="h-full bg-primary rounded-full transition-all duration-500 shadow-sm"
+                          style={{ width: `${porcentajeStock}%` }}
                         />
                       </div>
-                      <p className="text-[10px] text-on-surface-variant flex items-center justify-between">
+
+                      {/* Bottom Link */}
+                      <div className="flex items-center justify-between pt-1 border-t border-outline-variant/40 text-xs font-semibold text-on-surface-variant group-hover:text-primary transition-colors">
                         <span>Gestionar inventario</span>
-                        <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-                      </p>
+                        <span className="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1">arrow_forward</span>
+                      </div>
                     </div>
                   );
                 })}
