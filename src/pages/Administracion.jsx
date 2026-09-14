@@ -630,7 +630,7 @@ export default function Administracion() {
                 <div>
                   <div className="flex justify-between items-start text-on-surface-variant">
                     <span className="text-xs uppercase font-bold tracking-wider">Sabores Registrados</span>
-                    <span className="material-symbols-outlined text-secondary">icecream</span>
+                    <span className="material-symbols-outlined text-secondary">palette</span>
                   </div>
                   <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
                     {getInventarioAgrupado().length}
@@ -646,7 +646,7 @@ export default function Administracion() {
                 <div>
                   <div className="flex justify-between items-start text-on-surface-variant">
                     <span className="text-xs uppercase font-bold tracking-wider">Presentaciones</span>
-                    <span className="material-symbols-outlined text-tertiary">category</span>
+                    <span className="material-symbols-outlined text-tertiary">layers</span>
                   </div>
                   <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
                     {inventario.length}
