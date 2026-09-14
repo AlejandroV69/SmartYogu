@@ -50,9 +50,9 @@ export default function Login() {
         <div className="bg-slate-900/80 backdrop-blur-2xl border border-slate-800/80 p-8 sm:p-10 rounded-3xl shadow-[0_0_80px_rgba(0,0,0,0.6),0_0_30px_rgba(12,161,242,0.1)] transition-all">
           
           {/* Header & Logo */}
-          <div className="text-center mb-8">
-            <div className="relative inline-block mb-4">
-              <div className="w-20 h-20 bg-slate-800/80 border border-slate-700/60 rounded-2xl flex items-center justify-center mx-auto shadow-xl p-3 backdrop-blur-sm group transition-transform duration-300 hover:scale-105">
+          <div className="flex flex-col items-center text-center mb-8">
+            <div className="relative mb-4">
+              <div className="w-20 h-20 bg-slate-800/80 border border-slate-700/60 rounded-2xl flex items-center justify-center mx-auto shadow-xl p-3 backdrop-blur-sm transition-transform duration-300 hover:scale-105">
                 <img src="/favicon.png" alt="THÖRGURT Logo" className="w-full h-full object-contain drop-shadow" />
               </div>
               <span className="absolute -bottom-1 -right-1 flex h-4 w-4">
@@ -89,13 +89,13 @@ export default function Login() {
                 Correo Electrónico
               </label>
               <div className="relative group">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors text-[20px]">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors text-[20px]">
                   mail
                 </span>
                 <input
                   type="email"
                   required
-                  className="w-full bg-slate-950/70 border border-slate-800 rounded-xl pl-12 pr-4 py-3.5 text-sm text-white placeholder:text-slate-600 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-all"
+                  className="w-full bg-slate-950/90 border border-slate-700/80 rounded-xl pl-12 pr-4 py-3.5 text-sm text-white placeholder:text-slate-500 focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none transition-all"
                   placeholder="admin@smartyogu.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -108,13 +108,13 @@ export default function Login() {
                 Contraseña
               </label>
               <div className="relative group">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary transition-colors text-[20px]">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors text-[20px]">
                   lock
                 </span>
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
-                  className="w-full bg-slate-950/70 border border-slate-800 rounded-xl pl-12 pr-12 py-3.5 text-sm text-white placeholder:text-slate-600 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-all"
+                  className="w-full bg-slate-950/90 border border-slate-700/80 rounded-xl pl-12 pr-12 py-3.5 text-sm text-white placeholder:text-slate-500 focus:border-primary focus:ring-2 focus:ring-primary/30 focus:outline-none transition-all"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
