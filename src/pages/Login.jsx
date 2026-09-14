@@ -48,19 +48,6 @@ export default function Login() {
 
   return (
     <div className="relative min-h-screen w-full bg-background flex items-center justify-center p-4 overflow-hidden select-none font-sans">
-      {/* Theme Toggle Button */}
-      <button
-        onClick={toggleTheme}
-        className="absolute top-6 right-6 z-20 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container border border-outline-variant text-on-surface hover:text-primary hover:border-primary/50 transition-all active:scale-95 text-xs font-semibold shadow-md"
-        title={theme === 'light' ? 'Cambiar a Modo Oscuro' : 'Cambiar a Modo Claro'}
-      >
-        <span className="material-symbols-outlined text-[18px]">
-          {theme === 'light' ? 'dark_mode' : 'light_mode'}
-        </span>
-        <span className="hidden sm:inline">
-          {theme === 'light' ? 'Oscuro' : 'Claro'}
-        </span>
-      </button>
       {/* Ambient background glow */}
       <div className="absolute top-1/4 -left-20 w-96 h-96 bg-primary/15 rounded-full blur-[120px] pointer-events-none animate-pulse" />
       <div className="absolute bottom-1/4 -right-20 w-96 h-96 bg-primary/10 rounded-full blur-[140px] pointer-events-none" />
@@ -77,8 +64,20 @@ export default function Login() {
 
       <div className="w-full max-w-md relative z-10">
         {/* Main Card Container */}
-        <div className="bg-surface-container/90 backdrop-blur-2xl border border-outline-variant p-8 sm:p-10 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.5),0_0_30px_rgba(12,161,242,0.12)] transition-all">
+        <div className="bg-surface-container/90 backdrop-blur-2xl border border-outline-variant p-8 sm:p-10 rounded-3xl shadow-[0_20px_60px_rgba(0,0,0,0.5),0_0_30px_rgba(12,161,242,0.12)] transition-all relative">
           
+          {/* Theme Toggle Button inside Card */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="absolute top-5 right-5 w-9 h-9 rounded-xl bg-surface-container-high/80 hover:bg-surface-container-highest border border-outline-variant text-on-surface-variant hover:text-primary transition-all active:scale-90 flex items-center justify-center shadow-sm"
+            title={theme === 'light' ? 'Cambiar a Modo Oscuro' : 'Cambiar a Modo Claro'}
+          >
+            <span className="material-symbols-outlined text-[20px]">
+              {theme === 'light' ? 'dark_mode' : 'light_mode'}
+            </span>
+          </button>
+
           {/* Header & Logo */}
           <div className="flex flex-col items-center text-center mb-8">
             <div className="relative mb-4">
