@@ -9,8 +9,6 @@ export default function Administracion() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('Dashboard');
   const [modalOpen, setModalOpen] = useState(false);
-  const [modalRecibo, setModalRecibo] = useState(null); // pedido seleccionado para ver recibo
-  const [signedImageUrl, setSignedImageUrl] = useState(null); // URL firmada de la imagen
   const [addFlavorModalOpen, setAddFlavorModalOpen] = useState(false);
   const [editFlavorModalOpen, setEditFlavorModalOpen] = useState(false);
   const [addVariantModalOpen, setAddVariantModalOpen] = useState(false);
@@ -20,28 +18,12 @@ export default function Administracion() {
   const [newVariant, setNewVariant] = useState({ presentacion: '', precio: '', stock: '' });
   const [savingFlavor, setSavingFlavor] = useState(false);
 
-  // ── Configuración de Pago Móvil (Almacenado localmente / Fallback) ──
-  const [pagoMovilConfig, setPagoMovilConfig] = useState(() => {
-    const saved = localStorage.getItem('smartyogu_pagomovil_config');
-    return saved ? JSON.parse(saved) : {
-      banco: 'Mercantil (0105)',
-      cedula: 'V-29.863.496',
-      telefono: '0414-315-6352'
-    };
-  });
-  const [editPagoMovil, setEditPagoMovil] = useState({ ...pagoMovilConfig });
-  const [savingConfig, setSavingConfig] = useState(false);
-
   // ── Datos ─────────────────────────────────────────────────────────
   const [inventario, setInventario] = useState([]);
-  const [pedidos, setPedidos] = useState([]);
-  const [historial, setHistorial] = useState([]);
   const [sedes, setSedes] = useState([]);
   const [inventarioSedes, setInventarioSedes] = useState([]);
   const [selectedSedeTab, setSelectedSedeTab] = useState(null);
   const [loadingInv, setLoadingInv] = useState(true);
-  const [loadingPed, setLoadingPed] = useState(true);
-  const [loadingHist, setLoadingHist] = useState(true);
   const [loadingSedes, setLoadingSedes] = useState(true);
   const [error, setError] = useState(null);
   const [adminUser, setAdminUser] = useState({ name: 'Alejandro Viana', initials: 'AV' });
@@ -121,101 +103,6 @@ export default function Administracion() {
     fetchInventario();
   }, []);
 
-  // ── GET & REALTIME: pedidos e historial ──────────────────────────
-  useEffect(() => {
-    async function fetchPedidos() {
-      setLoadingPed(true);
-      const { data, error } = await supabase
-        .from('pedidos')
-        .select('id, cliente_nombre, cedula, telefono, tipo_entrega, direccion_envio, total, estado, comprobante_url, created_at, numero_transaccion, sede_id')
-        .in('estado', ['Pago por Verificar', 'Pendiente por Pago'])
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error cargando pedidos:', error.message);
-      } else {
-        setPedidos(data || []);
-      }
-      setLoadingPed(false);
-    }
-
-    async function fetchHistorial() {
-      setLoadingHist(true);
-      const { data, error } = await supabase
-        .from('pedidos')
-        .select('id, cliente_nombre, cedula, telefono, tipo_entrega, direccion_envio, total, estado, comprobante_url, created_at, numero_transaccion, sede_id')
-        .in('estado', ['Aprobado', 'Rechazado'])
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error cargando historial:', error.message);
-      } else {
-        setHistorial(data || []);
-      }
-      setLoadingHist(false);
-    }
-
-    fetchPedidos();
-    fetchHistorial();
-
-    // Suscripción Realtime para pedidos
-    const channel = supabase
-      .channel('pedidos-realtime-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', scheme: 'public', table: 'pedidos' },
-        (payload) => {
-          console.log('Cambio detectado en tiempo real:', payload);
-          const { eventType, new: newRow, old: oldRow } = payload;
-
-          if (eventType === 'INSERT') {
-            // Si es un pedido nuevo
-            if (['Pago por Verificar', 'Pendiente por Pago'].includes(newRow.estado)) {
-              setPedidos((prev) => [newRow, ...prev]);
-            } else if (['Aprobado', 'Rechazado'].includes(newRow.estado)) {
-              setHistorial((prev) => [newRow, ...prev]);
-            }
-          } else if (eventType === 'UPDATE') {
-            // Actualizar la cola de verificación
-            setPedidos((prev) => {
-              const existeEnCola = prev.some((p) => p.id === newRow.id);
-              if (['Pago por Verificar', 'Pendiente por Pago'].includes(newRow.estado)) {
-                if (existeEnCola) {
-                  return prev.map((p) => (p.id === newRow.id ? newRow : p));
-                } else {
-                  return [newRow, ...prev];
-                }
-              } else {
-                return prev.filter((p) => p.id !== newRow.id);
-              }
-            });
-
-            // Actualizar el historial
-            setHistorial((prev) => {
-              const existeEnHist = prev.some((h) => h.id === newRow.id);
-              if (['Aprobado', 'Rechazado'].includes(newRow.estado)) {
-                if (existeEnHist) {
-                  return prev.map((h) => (h.id === newRow.id ? newRow : h));
-                } else {
-                  return [newRow, ...prev];
-                }
-              } else {
-                return prev.filter((h) => h.id !== newRow.id);
-              }
-            });
-          } else if (eventType === 'DELETE') {
-            setPedidos((prev) => prev.filter((p) => p.id !== oldRow.id));
-            setHistorial((prev) => prev.filter((h) => h.id !== oldRow.id));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
   // ── GET: sedes e inventario_sedes ─────────────────────────────────
   useEffect(() => {
     async function fetchSedes() {
@@ -273,55 +160,7 @@ export default function Administracion() {
     }
   };
 
-  // ── UPDATE: cambiar estado de un pedido y descontar stock si es Aprobado ────────
-  const cambiarEstadoPedido = async (pedidoId, nuevoEstado) => {
-    const pedidoTarget = pedidos.find(p => p.id === pedidoId);
-    
-    // Actualización optimista
-    setPedidos((prev) => prev.map((p) => (p.id === pedidoId ? { ...p, estado: nuevoEstado } : p)));
 
-    const { error } = await supabase
-      .from('pedidos')
-      .update({ estado: nuevoEstado })
-      .eq('id', pedidoId);
-
-    if (error) {
-      console.error('Error actualizando pedido:', error.message);
-      setError(`No se pudo actualizar el pedido: ${error.message}`);
-    } else {
-      // Si el pedido es Rechazado, DEVOLVEMOS el stock al inventario (porque ya se descontó al crearlo)
-      if (nuevoEstado === 'Rechazado') {
-        const { data: detalles } = await supabase
-          .from('detalles_pedido')
-          .select('producto_id, cantidad')
-          .eq('pedido_id', pedidoId);
-
-        if (detalles) {
-          for (const det of detalles) {
-            const { data: itemDb } = await supabase
-              .from('inventario')
-              .select('stock')
-              .eq('id', det.producto_id)
-              .single();
-
-            if (itemDb) {
-              const newStock = itemDb.stock + det.cantidad;
-              await supabase.from('inventario').update({ stock: newStock }).eq('id', det.producto_id);
-              setInventario(prev => prev.map(p => p.id === det.producto_id ? { ...p, stock: newStock } : p));
-            }
-          }
-        }
-      }
-
-      // Quitar de la cola y mover al historial
-      if ((nuevoEstado === 'Aprobado' || nuevoEstado === 'Rechazado') && pedidoTarget) {
-        setTimeout(() => {
-          setPedidos((prev) => prev.filter((p) => p.id !== pedidoId));
-          setHistorial((prev) => [{ ...pedidoTarget, estado: nuevoEstado }, ...prev]);
-        }, 600);
-      }
-    }
-  };
 
   // ── POST: añadir nueva presentación a un sabor existente ───────────
   const handleAddVariant = async (e) => {
@@ -568,18 +407,6 @@ export default function Administracion() {
     return Object.values(agrupado).sort((a, b) => a.sabor.localeCompare(b.sabor));
   };
 
-  const getPedidosFiltrados = (lista) => {
-    const term = searchQuery.toLowerCase().trim();
-    if (!term) return lista;
-    return lista.filter(p => 
-      p.cliente_nombre?.toLowerCase().includes(term) ||
-      p.cedula?.toLowerCase().includes(term) ||
-      p.tipo_entrega?.toLowerCase().includes(term) ||
-      p.numero_transaccion?.toLowerCase().includes(term) ||
-      p.estado?.toLowerCase().includes(term)
-    );
-  };
-
   const getSedeName = (sedeId) => sedes.find(s => s.id === sedeId)?.nombre || '—';
 
   // Calcula el stock TOTAL de un producto sumando todas sus sedes
@@ -593,28 +420,6 @@ export default function Administracion() {
     inventarioSedes
       .filter(i => i.producto_id === productoId)
       .map(i => ({ nombre: getSedeName(i.sede_id), stock: i.stock }));
-
-  const handleOpenRecibo = async (pedido) => {
-    setModalRecibo(pedido);
-    setSignedImageUrl(null);
-    setModalOpen(true);
-    
-    if (pedido.comprobante_url) {
-      // Extract file path from full URL or use as is if it's just the file name
-      let filePath = pedido.comprobante_url;
-      if (filePath.includes('/storage/v1/object/public/comprobantes/')) {
-        filePath = filePath.split('/storage/v1/object/public/comprobantes/')[1];
-      }
-      
-      const { data, error } = await supabase.storage.from('comprobantes').createSignedUrl(filePath, 60 * 60); // 1 hour valid
-      if (!error && data) {
-        setSignedImageUrl(data.signedUrl);
-      } else {
-        // Fallback to original URL
-        setSignedImageUrl(pedido.comprobante_url);
-      }
-    }
-  };
 
   // ── Helpers UI ───────────────────────────────────────────────────
   const getStockColor = (stock) => {
@@ -632,13 +437,6 @@ export default function Administracion() {
     return new Date(dateStr).toLocaleString('es-VE', {
       day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
     });
-  };
-
-  const getEstadoBadge = (estado) => {
-    if (estado === 'Aprobado') return 'bg-green-500/20 text-green-400 border-green-500/30';
-    if (estado === 'Rechazado') return 'bg-error/20 text-error border-error/30';
-    if (estado === 'Pago por Verificar') return 'bg-tertiary/20 text-tertiary border-tertiary/30';
-    return 'bg-surface-container-highest text-on-surface-variant border-outline-variant';
   };
 
   const handleLogout = async () => {
@@ -670,10 +468,7 @@ export default function Administracion() {
           {[
             { icon: 'dashboard', label: 'Inicio', id: 'Dashboard' },
             { icon: 'inventory_2', label: 'Inventario', id: 'Inventory' },
-            { icon: 'verified_user', label: 'Verificación', id: 'Verification' },
-            { icon: 'history', label: 'Historial', id: 'History' },
             { icon: 'store', label: 'Sedes', id: 'Sedes' },
-            { icon: 'settings', label: 'Configuración', id: 'Settings' },
           ].map((item) => {
             const isActive = activeTab === item.id;
             return (
@@ -740,7 +535,7 @@ export default function Administracion() {
               <span className="material-symbols-outlined text-on-surface-variant text-sm mr-1">search</span>
               <input
                 className="bg-transparent border-none focus:outline-none text-sm text-on-surface w-48"
-                placeholder="Buscar pedido o sabor..."
+                placeholder="Buscar sabor o presentación..."
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -771,63 +566,6 @@ export default function Administracion() {
           {/* Dashboard KPIs Section */}
           {activeTab === 'Dashboard' && (
             <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* KPI: Ventas de Hoy */}
-              <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start text-on-surface-variant">
-                    <span className="text-xs uppercase font-bold tracking-wider">Ventas de Hoy</span>
-                    <span className="material-symbols-outlined text-primary">calendar_today</span>
-                  </div>
-                  <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
-                    ${(() => {
-                      const hoy = new Date().toISOString().split('T')[0];
-                      const totalHoy = historial
-                        .filter(p => p.estado === 'Aprobado' && p.created_at.startsWith(hoy))
-                        .reduce((sum, p) => sum + Number(p.total), 0);
-                      return totalHoy.toFixed(2);
-                    })()}
-                  </h3>
-                </div>
-                <p className="text-[11px] text-on-surface-variant mt-3">
-                  Solo pedidos con estado <span className="text-green-400 font-bold">Aprobado</span>
-                </p>
-              </div>
-
-              {/* KPI: Pedidos Pendientes */}
-              <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start text-on-surface-variant">
-                    <span className="text-xs uppercase font-bold tracking-wider">Por Verificar</span>
-                    <span className="material-symbols-outlined text-tertiary">pending_actions</span>
-                  </div>
-                  <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
-                    {pedidos.filter(p => p.estado === 'Pago por Verificar').length}
-                  </h3>
-                </div>
-                <p className="text-[11px] text-on-surface-variant mt-3">
-                  Pagos pendientes de aprobación manual
-                </p>
-              </div>
-
-              {/* KPI: Total Recaudado */}
-              <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start text-on-surface-variant">
-                    <span className="text-xs uppercase font-bold tracking-wider">Total Histórico</span>
-                    <span className="material-symbols-outlined text-green-500">payments</span>
-                  </div>
-                  <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
-                    ${historial
-                      .filter(p => p.estado === 'Aprobado')
-                      .reduce((sum, p) => sum + Number(p.total), 0)
-                      .toFixed(2)}
-                  </h3>
-                </div>
-                <p className="text-[11px] text-on-surface-variant mt-3">
-                  Acumulado histórico aprobado
-                </p>
-              </div>
-
               {/* KPI: Stock Total Global */}
               <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
                 <div>
@@ -840,7 +578,55 @@ export default function Administracion() {
                   </h3>
                 </div>
                 <p className="text-[11px] text-on-surface-variant mt-3">
-                  Suma total de unidades en todas las sedes
+                  Suma total de unidades físicas en todas las sedes
+                </p>
+              </div>
+
+              {/* KPI: Total Sabores */}
+              <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start text-on-surface-variant">
+                    <span className="text-xs uppercase font-bold tracking-wider">Sabores Registrados</span>
+                    <span className="material-symbols-outlined text-secondary">icecream</span>
+                  </div>
+                  <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
+                    {getInventarioAgrupado().length}
+                  </h3>
+                </div>
+                <p className="text-[11px] text-on-surface-variant mt-3">
+                  Líneas de sabores activas en catálogo
+                </p>
+              </div>
+
+              {/* KPI: Presentaciones / Productos */}
+              <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start text-on-surface-variant">
+                    <span className="text-xs uppercase font-bold tracking-wider">Presentaciones</span>
+                    <span className="material-symbols-outlined text-tertiary">category</span>
+                  </div>
+                  <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
+                    {inventario.length}
+                  </h3>
+                </div>
+                <p className="text-[11px] text-on-surface-variant mt-3">
+                  Variantes de tamaño y empaque en inventario
+                </p>
+              </div>
+
+              {/* KPI: Sedes Activas */}
+              <div className="bg-surface-container border border-outline-variant rounded-xl p-5 flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start text-on-surface-variant">
+                    <span className="text-xs uppercase font-bold tracking-wider">Sedes Activas</span>
+                    <span className="material-symbols-outlined text-green-500">store</span>
+                  </div>
+                  <h3 className="text-3xl font-extrabold text-on-surface mt-2 tracking-tight">
+                    {sedes.filter(s => s.activa).length}
+                  </h3>
+                </div>
+                <p className="text-[11px] text-on-surface-variant mt-3">
+                  Puntos de venta operativos registrados
                 </p>
               </div>
             </section>
@@ -974,7 +760,7 @@ export default function Administracion() {
                         texto += `Actualmente no hay productos disponibles.\n\n`;
                       }
 
-                      texto += `- - - - - - - - - - - - -\n📦 Hacemos delivery\n📲 ¡Escríbenos para hacer tu pedido!\n\n🌐 Registra tu compra aquí:\nhttps://smart-yogu.vercel.app/`;
+                      texto += `- - - - - - - - - - - - -\n📦 Hacemos delivery\n📲 ¡Escríbenos para hacer tu pedido!`;
 
                       if (navigator.clipboard) {
                         navigator.clipboard.writeText(texto);
@@ -1108,209 +894,7 @@ export default function Administracion() {
             </section>
           )}
 
-          {/* ── Sección 2: Cola de Verificación ─────────────────────── */}
-          {(activeTab === 'Dashboard' || activeTab === 'Verification') && (
-            <section id="verification">
-              <div className="mb-6">
-                <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Cola de Verificación</h3>
-                <p className="text-on-surface-variant text-sm font-medium">
-                  Validación manual de pagos y comprobantes bancarios
-                </p>
-              </div>
 
-              {loadingPed ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((n) => (
-                    <div key={n} className="h-16 bg-surface-container rounded-xl animate-pulse border border-outline-variant" />
-                  ))}
-                </div>
-              ) : pedidos.length === 0 ? (
-                <div className="text-center py-12 bg-surface-container rounded-xl border border-outline-variant">
-                  <span className="material-symbols-outlined text-5xl text-on-surface-variant block mb-3">inbox</span>
-                  <p className="text-on-surface-variant text-sm">No hay pagos pendientes de verificación.</p>
-                </div>
-              ) : (
-                <div className="bg-surface-container border border-outline-variant rounded-xl overflow-hidden overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[700px]">
-                    <thead>
-                      <tr className="bg-surface-container-high border-b border-outline-variant">
-                        {['Cliente', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante', 'Acciones'].map((h) => (
-                          <th key={h} className={`px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest whitespace-nowrap ${h === 'Comprobante' || h === 'Acciones' ? 'text-center' : 'text-left'}`}>
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant">
-                      {getPedidosFiltrados(pedidos).map((pedido) => (
-                        <tr
-                          key={pedido.id}
-                          className="hover:bg-surface-container-highest transition-colors group"
-                        >
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
-                                {pedido.cliente_nombre?.slice(0, 2).toUpperCase() || '??'}
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-on-surface whitespace-nowrap">
-                                  {pedido.cliente_nombre}
-                                  <span className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded ml-2">#{pedido.id}</span>
-                                </p>
-                                <p className="text-xs text-on-surface-variant">
-                                  {pedido.cedula} | {pedido.telefono}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="px-6 py-4 text-sm text-on-surface-variant font-medium whitespace-nowrap">
-                            {pedido.numero_transaccion ? `#${pedido.numero_transaccion}` : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm font-medium text-primary whitespace-nowrap">
-                            ${Number(pedido.total).toFixed(2)}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-on-surface-variant whitespace-nowrap">
-                            {formatDate(pedido.created_at)}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${getEstadoBadge(pedido.estado)}`}>
-                              {pedido.estado}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            {pedido.comprobante_url ? (
-                              <button
-                                className="inline-flex items-center justify-center gap-1 px-3 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all whitespace-nowrap mx-auto"
-                                onClick={() => handleOpenRecibo(pedido)}
-                              >
-                                <span className="material-symbols-outlined text-sm">visibility</span>
-                                Ver
-                              </button>
-                            ) : (
-                              <span className="text-xs text-on-surface-variant italic whitespace-nowrap block text-center">Sin archivo</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex justify-center gap-2">
-                              {pedido.estado !== 'Aprobado' && (
-                                <button
-                                  className="px-3 py-1.5 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg text-xs font-medium hover:bg-green-500 hover:text-white transition-all active:scale-95"
-                                  onClick={() => cambiarEstadoPedido(pedido.id, 'Aprobado')}
-                                >
-                                  Aprobar
-                                </button>
-                              )}
-                              {pedido.estado !== 'Rechazado' && (
-                                <button
-                                  className="px-3 py-1.5 bg-error/20 text-error border border-error/30 rounded-lg text-xs font-medium hover:bg-error hover:text-on-error transition-all active:scale-95"
-                                  onClick={() => cambiarEstadoPedido(pedido.id, 'Rechazado')}
-                                >
-                                  Rechazar
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* ── Sección 3: Historial de Pedidos ────────────────────────── */}
-          {(activeTab === 'Dashboard' || activeTab === 'History') && (
-            <section id="history">
-              <div className="mb-6 mt-12">
-                <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Historial de Pedidos</h3>
-                <p className="text-on-surface-variant text-sm font-medium">
-                  Registro de todos los pedidos aprobados y rechazados
-                </p>
-              </div>
-
-              {loadingHist ? (
-                <div className="space-y-3">
-                  {[1, 2, 3].map((n) => (
-                    <div key={n} className="h-16 bg-surface-container rounded-xl animate-pulse border border-outline-variant" />
-                  ))}
-                </div>
-              ) : historial.length === 0 ? (
-                <div className="text-center py-12 bg-surface-container rounded-xl border border-outline-variant">
-                  <span className="material-symbols-outlined text-5xl text-on-surface-variant block mb-3">history</span>
-                  <p className="text-on-surface-variant text-sm">No hay registros en el historial.</p>
-                </div>
-              ) : (
-                <div className="bg-surface-container border border-outline-variant rounded-xl overflow-hidden overflow-x-auto">
-                  <table className="w-full text-left border-collapse min-w-[700px]">
-                    <thead>
-                      <tr className="bg-surface-container-high border-b border-outline-variant">
-                        {['Cliente', 'Ref.', 'Monto', 'Fecha / Hora', 'Estado', 'Comprobante'].map((h) => (
-                          <th key={h} className={`px-6 py-4 text-xs font-bold text-on-surface-variant uppercase tracking-widest whitespace-nowrap ${h === 'Comprobante' ? 'text-center' : 'text-left'}`}>
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-outline-variant">
-                      {getPedidosFiltrados(historial).map((pedido) => (
-                        <tr
-                          key={pedido.id}
-                          className="hover:bg-surface-container-highest transition-colors group opacity-80"
-                        >
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded bg-primary/20 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
-                                {pedido.cliente_nombre?.slice(0, 2).toUpperCase() || '??'}
-                              </div>
-                              <div>
-                                <p className="text-sm font-medium text-on-surface whitespace-nowrap">
-                                  {pedido.cliente_nombre}
-                                  <span className="text-xs font-mono text-primary bg-primary/10 px-1.5 py-0.5 rounded ml-2">#{pedido.id}</span>
-                                </p>
-                                <p className="text-xs text-on-surface-variant">
-                                  {pedido.cedula} | {pedido.telefono}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="px-6 py-4 text-sm text-on-surface-variant font-medium whitespace-nowrap">
-                            {pedido.numero_transaccion ? `#${pedido.numero_transaccion}` : '-'}
-                          </td>
-                          <td className="px-6 py-4 text-sm font-medium text-primary whitespace-nowrap">
-                            ${Number(pedido.total).toFixed(2)}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-on-surface-variant whitespace-nowrap">
-                            {formatDate(pedido.created_at)}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`inline-flex px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border whitespace-nowrap ${getEstadoBadge(pedido.estado)}`}>
-                              {pedido.estado}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            {pedido.comprobante_url ? (
-                              <button
-                                className="inline-flex items-center justify-center gap-1 px-3 py-1 bg-surface-container-highest border border-outline-variant rounded text-xs text-primary hover:bg-primary hover:text-on-primary transition-all whitespace-nowrap mx-auto"
-                                onClick={() => handleOpenRecibo(pedido)}
-                              >
-                                <span className="material-symbols-outlined text-sm">visibility</span>
-                                Ver
-                              </button>
-                            ) : (
-                              <span className="text-xs text-on-surface-variant italic whitespace-nowrap block text-center">-</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          )}
 
           {/* ── Sección 5: Sedes ──────────────────────────────────────────── */}
           {activeTab === 'Sedes' && (
@@ -1365,7 +949,7 @@ export default function Administracion() {
                           texto += `Actualmente no hay productos disponibles en esta sede.\n\n`;
                         }
                         
-                        texto += `- - - - - - - - - - - - -\n📦 Hacemos delivery\n📲 ¡Escríbenos para hacer tu pedido!\n\n🌐 Registra tu compra aquí:\nhttps://smart-yogu.vercel.app/`;
+                        texto += `- - - - - - - - - - - - -\n📦 Hacemos delivery\n📲 ¡Escríbenos para hacer tu pedido!`;
 
                         if (navigator.clipboard) {
                           navigator.clipboard.writeText(texto);
@@ -1663,82 +1247,7 @@ export default function Administracion() {
         </footer>
       </main>
 
-      {/* Modal: Vista de comprobante */}
-      {modalOpen && modalRecibo && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4"
-          onClick={() => setModalOpen(false)}
-        >
-          <div
-            className="bg-surface-container border border-outline-variant rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="p-6 border-b border-outline-variant flex justify-between items-center">
-              <div>
-                <h3 className="font-semibold text-xl text-on-surface">Comprobante de Pago</h3>
-                <p className="text-xs text-on-surface-variant mt-1">{modalRecibo.cliente_nombre}</p>
-              </div>
-              <button
-                className="text-on-surface-variant hover:text-primary transition-colors"
-                onClick={() => setModalOpen(false)}
-              >
-                <span className="material-symbols-outlined">close</span>
-              </button>
-            </div>
-            <div className="p-6 bg-surface-container-lowest">
-              {modalRecibo.comprobante_url ? (
-                <img
-                  src={signedImageUrl || modalRecibo.comprobante_url}
-                  alt="Comprobante de pago"
-                  className="w-full max-h-[60vh] object-contain rounded-lg border border-outline-variant"
-                />
-              ) : (
-                <div className="w-full aspect-[3/4] bg-surface-container-highest rounded-lg flex items-center justify-center border border-outline-variant">
-                  <span className="material-symbols-outlined text-on-surface-variant text-6xl">receipt_long</span>
-                </div>
-              )}
-            </div>
-            <div className="p-6 border-t border-outline-variant flex justify-between items-center gap-4">
-              <div>
-                <p className="text-sm text-on-surface font-medium">${Number(modalRecibo.total).toFixed(2)}</p>
-                <p className="text-xs text-on-surface-variant">{formatDate(modalRecibo.created_at)}</p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  className="px-3 py-2 text-sm font-medium text-on-surface-variant hover:text-on-surface border border-outline-variant rounded-lg transition-all"
-                  onClick={() => setModalOpen(false)}
-                >
-                  Cerrar
-                </button>
-                {modalRecibo.estado !== 'Rechazado' && modalRecibo.estado !== 'Aprobado' && (
-                  <button
-                    className="px-3 py-2 bg-error/20 text-error border border-error/30 rounded-lg text-sm font-medium hover:bg-error hover:text-on-error transition-all active:scale-95"
-                    onClick={() => {
-                      if (window.confirm('¿Estás seguro de que deseas rechazar este pago?')) {
-                        cambiarEstadoPedido(modalRecibo.id, 'Rechazado');
-                        setModalOpen(false);
-                      }
-                    }}
-                  >
-                    Rechazar
-                  </button>
-                )}
-                {modalRecibo.estado !== 'Aprobado' && (
-                  <button
-                    className="px-4 py-2 bg-primary text-on-primary rounded-lg text-sm font-medium active:scale-95 transition-all"
-                    onClick={() => {
-                      cambiarEstadoPedido(modalRecibo.id, 'Aprobado');
-                      setModalOpen(false);
-                    }}
-                  >
-                    Aprobar Pago
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Modal: Añadir Sabor */}
       {addFlavorModalOpen && (

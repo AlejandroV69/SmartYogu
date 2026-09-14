@@ -1,6 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
-import ReportarPago from './pages/ReportarPago';
 import { supabase } from './supabaseClient';
 
 // Lazy loading de componentes pesados para optimizar el tiempo de carga en Safari
@@ -60,17 +59,18 @@ function App() {
   return (
     <Suspense fallback={<LoadingScreen />}>
       <Routes>
-        <Route path="/" element={<ReportarPago />} />
-        <Route path="/pago" element={<Navigate to="/" replace />} />
-        <Route path="/login" element={<Login />} />
         <Route
-          path="/admin"
+          path="/"
           element={
             <ProtectedRoute>
               <Administracion />
             </ProtectedRoute>
           }
         />
+        <Route path="/login" element={<Login />} />
+        <Route path="/admin" element={<Navigate to="/" replace />} />
+        <Route path="/pago" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Suspense>
   );
