@@ -18,6 +18,48 @@ export default function Administracion() {
   const [newVariant, setNewVariant] = useState({ presentacion: '', precio: '', stock: '' });
   const [savingFlavor, setSavingFlavor] = useState(false);
 
+  // ── Configuración de Pago Móvil ──────────────────────────────────
+  const [pagoMovilConfig, setPagoMovilConfig] = useState(() => {
+    const saved = localStorage.getItem('smartyogu_pagomovil_config');
+    return saved ? JSON.parse(saved) : {
+      banco: 'Mercantil (0105)',
+      cedula: 'V-29.863.496',
+      telefono: '0414-315-6352'
+    };
+  });
+  const [editPagoMovil, setEditPagoMovil] = useState({ ...pagoMovilConfig });
+  const [savingConfig, setSavingConfig] = useState(false);
+
+  // ── Tasa BCV & Calculadora ───────────────────────────────────────
+  const [bcvRate, setBcvRate] = useState(null);
+  const [loadingBcv, setLoadingBcv] = useState(false);
+  const [bcvError, setBcvError] = useState(null);
+  const [montoUSD, setMontoUSD] = useState('10');
+  const [copiedKey, setCopiedKey] = useState('');
+
+  const fetchBCVRate = async () => {
+    setLoadingBcv(true);
+    setBcvError(null);
+    try {
+      const res = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
+      const data = await res.json();
+      if (data && data.promedio) {
+        setBcvRate(data.promedio);
+      } else {
+        setBcvError('No se pudo obtener la tasa de la API.');
+      }
+    } catch (err) {
+      console.error('Error cargando tasa BCV:', err);
+      setBcvError('Error de red al consultar tasa BCV.');
+    } finally {
+      setLoadingBcv(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchBCVRate();
+  }, []);
+
   // ── Datos ─────────────────────────────────────────────────────────
   const [inventario, setInventario] = useState([]);
   const [sedes, setSedes] = useState([]);
@@ -469,6 +511,7 @@ export default function Administracion() {
             { icon: 'dashboard', label: 'Inicio', id: 'Dashboard' },
             { icon: 'inventory_2', label: 'Inventario', id: 'Inventory' },
             { icon: 'store', label: 'Sedes', id: 'Sedes' },
+            { icon: 'payments', label: 'Datos de Pago', id: 'PagoMovil' },
           ].map((item) => {
             const isActive = activeTab === item.id;
             return (
@@ -1158,80 +1201,313 @@ export default function Administracion() {
             </section>
           )}
 
-          {/* ── Sección 4: Configuración ────────────────────────────────────────── */}
-          {activeTab === 'Settings' && (
-            <section id="settings" className="max-w-2xl bg-surface-container border border-outline-variant rounded-xl p-6">
-              <div className="mb-6">
-                <h3 className="font-semibold text-xl text-on-surface">Datos de Pago Móvil</h3>
-                <p className="text-on-surface-variant text-sm font-medium">
-                  Configura los datos que ven los clientes al reportar su pago
-                </p>
+          {/* ── Sección 4: Datos de Pago & Conversión BCV ────────────────────────── */}
+          {activeTab === 'PagoMovil' && (
+            <section id="pago-movil" className="space-y-6">
+              <div className="flex flex-wrap justify-between items-center gap-4">
+                <div>
+                  <h3 className="font-semibold text-xl md:text-2xl text-on-surface">Datos de Pago Móvil & Conversión</h3>
+                  <p className="text-on-surface-variant text-sm font-medium">
+                    Calculadora con Tasa Oficial del BCV y herramientas de copiado rápido para clientes
+                  </p>
+                </div>
+                {/* Card Tasa BCV */}
+                <div className="bg-surface-container border border-outline-variant rounded-xl px-5 py-3 flex items-center gap-4 shadow-sm">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold">
+                    <span className="material-symbols-outlined">currency_exchange</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider block">Tasa BCV Oficial</span>
+                    <div className="text-xl font-extrabold text-on-surface">
+                      {loadingBcv ? (
+                        <span className="text-sm text-on-surface-variant animate-pulse">Cargando...</span>
+                      ) : bcvRate ? (
+                        <span>{Number(bcvRate).toFixed(2)} <span className="text-xs font-normal text-on-surface-variant">Bs/$</span></span>
+                      ) : (
+                        <span className="text-xs text-error">Sin conexión</span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={fetchBCVRate}
+                    disabled={loadingBcv}
+                    className="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-highest rounded-full transition-all active:scale-90"
+                    title="Actualizar tasa BCV"
+                  >
+                    <span className={`material-symbols-outlined text-[20px] ${loadingBcv ? 'animate-spin' : ''}`}>sync</span>
+                  </button>
+                </div>
               </div>
 
-               <form 
-                 onSubmit={(e) => {
-                   e.preventDefault();
-                   setSavingConfig(true);
-                   localStorage.setItem('smartyogu_pagomovil_config', JSON.stringify(editPagoMovil));
-                   setPagoMovilConfig({ ...editPagoMovil });
-                   
-                   // Notificar a otras pestañas/ventanas del cambio
-                   window.dispatchEvent(new Event('storage'));
-                   
-                   setTimeout(() => {
-                     setSavingConfig(false);
-                     alert('Configuración guardada exitosamente.');
-                   }, 500);
-                 }}
-                 className="space-y-4"
-               >
-                 <div>
-                   <label className="text-sm font-medium text-on-surface-variant block mb-1">Banco</label>
-                   <input
-                     required
-                     type="text"
-                     className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
-                     value={editPagoMovil.banco}
-                     onChange={(e) => setEditPagoMovil({ ...editPagoMovil, banco: e.target.value })}
-                   />
-                 </div>
-                 <div>
-                   <label className="text-sm font-medium text-on-surface-variant block mb-1">Cédula / RIF</label>
-                   <input
-                     required
-                     type="text"
-                     className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
-                     value={editPagoMovil.cedula}
-                     onChange={(e) => setEditPagoMovil({ ...editPagoMovil, cedula: e.target.value })}
-                   />
-                 </div>
-                 <div>
-                   <label className="text-sm font-medium text-on-surface-variant block mb-1">Teléfono</label>
-                   <input
-                     required
-                     type="text"
-                     className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-3 focus:border-primary focus:outline-none text-on-surface"
-                     value={editPagoMovil.telefono}
-                     onChange={(e) => setEditPagoMovil({ ...editPagoMovil, telefono: e.target.value })}
-                   />
-                 </div>
-                 
-                 <div className="pt-2">
-                   <button
-                     type="submit"
-                     disabled={savingConfig}
-                     className="px-6 py-3 bg-primary text-on-primary rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer active:scale-95"
-                   >
-                     {savingConfig ? (
-                       <><span className="material-symbols-outlined animate-spin">sync</span> Guardando...</>
-                     ) : (
-                       'Guardar Configuración'
-                     )}
-                   </button>
-                 </div>
-               </form>
-             </section>
-           )}
+              {bcvError && (
+                <div className="p-3 bg-error-container/20 border border-error/30 rounded-lg flex items-center justify-between text-xs text-error">
+                  <span>{bcvError} Puedes ingresar la tasa manualmente si lo necesitas.</span>
+                  <button
+                    onClick={() => {
+                      const manual = prompt('Ingresa la tasa BCV (Bs/$):', bcvRate || '45.00');
+                      if (manual && !isNaN(manual)) setBcvRate(parseFloat(manual));
+                    }}
+                    className="underline font-bold ml-2"
+                  >
+                    Editar tasa
+                  </button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Columna 1 & 2: Calculadora y Acciones de Copiado Rápido */}
+                <div className="lg:col-span-2 space-y-6">
+                  {/* Card Calculadora */}
+                  <div className="bg-surface-container border border-outline-variant rounded-xl p-6 space-y-6 shadow-sm">
+                    <h4 className="font-semibold text-lg text-primary flex items-center gap-2">
+                      <span className="material-symbols-outlined">calculate</span>
+                      Calculadora de Conversión USD ➔ Bolívares
+                    </h4>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                      <div>
+                        <label className="text-xs font-bold uppercase text-on-surface-variant block mb-1">Monto en Dólares ($ USD)</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-3 text-on-surface-variant font-bold">$</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className="w-full bg-surface-container-low border border-outline-variant rounded-lg pl-8 pr-4 py-3 font-extrabold text-xl text-on-surface focus:border-primary focus:outline-none"
+                            value={montoUSD}
+                            onChange={(e) => setMontoUSD(e.target.value)}
+                            placeholder="0.00"
+                          />
+                        </div>
+                        {/* Botones de acceso rápido a montos frecuentes */}
+                        <div className="flex gap-1.5 mt-2 flex-wrap">
+                          {['5', '10', '15', '20', '50'].map(val => (
+                            <button
+                              key={val}
+                              onClick={() => setMontoUSD(val)}
+                              className={`px-2.5 py-1 text-xs rounded-md border font-medium transition-all ${
+                                montoUSD === val
+                                  ? 'bg-primary text-on-primary border-primary'
+                                  : 'bg-surface-container-low border-outline-variant text-on-surface-variant hover:bg-surface-container-highest'
+                              }`}
+                            >
+                              ${val}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Resultado en Bs */}
+                      <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 flex flex-col justify-between h-full min-h-[100px]">
+                        <span className="text-xs font-bold uppercase text-primary tracking-wider">Total a Pagar en Bolívares</span>
+                        <div className="flex items-baseline justify-between mt-1">
+                          <span className="text-3xl font-extrabold text-on-surface tracking-tight">
+                            {montoUSD && bcvRate
+                              ? (parseFloat(montoUSD) * bcvRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                              : '0,00'} <span className="text-base font-normal text-on-surface-variant">Bs</span>
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-on-surface-variant mt-1">
+                          Calculado a tasa BCV: <strong className="text-on-surface">{bcvRate ? `${Number(bcvRate).toFixed(2)} Bs/$` : '—'}</strong>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Botones de copiado rápido individual */}
+                    <div className="border-t border-outline-variant pt-6">
+                      <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-3">Copiar Datos Rápidos para Banca Móvil</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {/* Copiar Monto en Bs */}
+                        <button
+                          onClick={() => {
+                            const montoBs = montoUSD && bcvRate ? (parseFloat(montoUSD) * bcvRate).toFixed(2) : '0.00';
+                            navigator.clipboard.writeText(montoBs);
+                            setCopiedKey('monto');
+                            setTimeout(() => setCopiedKey(''), 2000);
+                          }}
+                          className="flex items-center justify-between p-3 bg-surface-container-low border border-outline-variant rounded-lg hover:border-primary transition-all text-left active:scale-95 group"
+                        >
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-on-surface-variant block">Monto en Bs</span>
+                            <span className="text-sm font-extrabold text-primary">
+                              {montoUSD && bcvRate ? (parseFloat(montoUSD) * bcvRate).toFixed(2) : '0.00'} Bs
+                            </span>
+                          </div>
+                          <span className="material-symbols-outlined text-sm text-on-surface-variant group-hover:text-primary">
+                            {copiedKey === 'monto' ? 'check' : 'content_copy'}
+                          </span>
+                        </button>
+
+                        {/* Copiar Teléfono */}
+                        <button
+                          onClick={() => {
+                            const clean = pagoMovilConfig.telefono.replace(/\D/g, '');
+                            navigator.clipboard.writeText(clean);
+                            setCopiedKey('telefono');
+                            setTimeout(() => setCopiedKey(''), 2000);
+                          }}
+                          className="flex items-center justify-between p-3 bg-surface-container-low border border-outline-variant rounded-lg hover:border-primary transition-all text-left active:scale-95 group"
+                        >
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-on-surface-variant block">Teléfono</span>
+                            <span className="text-sm font-bold text-on-surface">{pagoMovilConfig.telefono}</span>
+                          </div>
+                          <span className="material-symbols-outlined text-sm text-on-surface-variant group-hover:text-primary">
+                            {copiedKey === 'telefono' ? 'check' : 'content_copy'}
+                          </span>
+                        </button>
+
+                        {/* Copiar Cédula */}
+                        <button
+                          onClick={() => {
+                            const clean = pagoMovilConfig.cedula.replace(/\D/g, '');
+                            navigator.clipboard.writeText(clean);
+                            setCopiedKey('cedula');
+                            setTimeout(() => setCopiedKey(''), 2000);
+                          }}
+                          className="flex items-center justify-between p-3 bg-surface-container-low border border-outline-variant rounded-lg hover:border-primary transition-all text-left active:scale-95 group"
+                        >
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-on-surface-variant block">Cédula / RIF</span>
+                            <span className="text-sm font-bold text-on-surface">{pagoMovilConfig.cedula}</span>
+                          </div>
+                          <span className="material-symbols-outlined text-sm text-on-surface-variant group-hover:text-primary">
+                            {copiedKey === 'cedula' ? 'check' : 'content_copy'}
+                          </span>
+                        </button>
+
+                        {/* Copiar Banco */}
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(pagoMovilConfig.banco);
+                            setCopiedKey('banco');
+                            setTimeout(() => setCopiedKey(''), 2000);
+                          }}
+                          className="flex items-center justify-between p-3 bg-surface-container-low border border-outline-variant rounded-lg hover:border-primary transition-all text-left active:scale-95 group"
+                        >
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-on-surface-variant block">Banco</span>
+                            <span className="text-sm font-bold text-on-surface truncate max-w-[120px]">{pagoMovilConfig.banco}</span>
+                          </div>
+                          <span className="material-symbols-outlined text-sm text-on-surface-variant group-hover:text-primary">
+                            {copiedKey === 'banco' ? 'check' : 'content_copy'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Copiar Plantilla Completa para WhatsApp */}
+                    <div className="bg-surface-container-low border border-outline-variant rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
+                      <div>
+                        <h5 className="font-bold text-sm text-on-surface flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-green-500 text-base">chat</span>
+                          Plantilla Completa para WhatsApp
+                        </h5>
+                        <p className="text-xs text-on-surface-variant mt-0.5">
+                          Copia la ficha de pago lista con el monto exacto en Bolívares para enviar a clientes.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          const cleanCedula = pagoMovilConfig.cedula.replace(/\D/g, '');
+                          const cleanTelefono = pagoMovilConfig.telefono.replace(/\D/g, '');
+                          const montoBs = montoUSD && bcvRate ? (parseFloat(montoUSD) * bcvRate).toFixed(2) : '0.00';
+                          
+                          const texto = `💳 *DATOS DE PAGO MÓVIL - THÖRGURT* 💳\n- - - - - - - - - - - - -\n🏛 *Banco:* ${pagoMovilConfig.banco}\n🪪 *Cédula/RIF:* ${cleanCedula}\n📱 *Teléfono:* ${cleanTelefono}\n\n💵 *Monto en USD:* $${parseFloat(montoUSD || 0).toFixed(2)}\n📊 *Tasa BCV:* ${bcvRate ? Number(bcvRate).toFixed(2) : '—'} Bs/$\n💰 *Total a Transferir:* ${montoBs} Bs\n- - - - - - - - - - - - -\n📲 Envíanos tu comprobante o captura por aquí. ¡Muchas gracias!`;
+
+                          navigator.clipboard.writeText(texto);
+                          setCopiedKey('whatsapp');
+                          setTimeout(() => setCopiedKey(''), 2000);
+                          alert('¡Plantilla completa copiada al portapapeles! Lista para pegar en WhatsApp.');
+                        }}
+                        className="bg-green-600 hover:bg-green-700 text-white font-bold px-4 py-2.5 rounded-lg text-sm flex items-center gap-2 transition-all active:scale-95 shadow-md"
+                      >
+                        <span className="material-symbols-outlined text-sm">
+                          {copiedKey === 'whatsapp' ? 'check' : 'content_copy'}
+                        </span>
+                        {copiedKey === 'whatsapp' ? '¡Copiado!' : 'Copiar para WhatsApp'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Columna 3: Formulario de Configuración de Datos de Pago */}
+                <div className="bg-surface-container border border-outline-variant rounded-xl p-6 space-y-4 shadow-sm h-fit">
+                  <div>
+                    <h4 className="font-semibold text-lg text-on-surface flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary">settings</span>
+                      Configurar Datos Bancarios
+                    </h4>
+                    <p className="text-on-surface-variant text-xs mt-1">
+                      Estos datos se guardan de manera permanente en este navegador.
+                    </p>
+                  </div>
+
+                  <form 
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setSavingConfig(true);
+                      localStorage.setItem('smartyogu_pagomovil_config', JSON.stringify(editPagoMovil));
+                      setPagoMovilConfig({ ...editPagoMovil });
+                      
+                      window.dispatchEvent(new Event('storage'));
+                      
+                      setTimeout(() => {
+                        setSavingConfig(false);
+                        alert('Datos de Pago Móvil guardados exitosamente.');
+                      }, 400);
+                    }}
+                    className="space-y-4 pt-2"
+                  >
+                    <div>
+                      <label className="text-xs font-bold uppercase text-on-surface-variant block mb-1">Banco</label>
+                      <input
+                        required
+                        type="text"
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-2.5 text-sm focus:border-primary focus:outline-none text-on-surface font-medium"
+                        value={editPagoMovil.banco}
+                        onChange={(e) => setEditPagoMovil({ ...editPagoMovil, banco: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold uppercase text-on-surface-variant block mb-1">Cédula / RIF</label>
+                      <input
+                        required
+                        type="text"
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-2.5 text-sm focus:border-primary focus:outline-none text-on-surface font-medium"
+                        value={editPagoMovil.cedula}
+                        onChange={(e) => setEditPagoMovil({ ...editPagoMovil, cedula: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold uppercase text-on-surface-variant block mb-1">Teléfono</label>
+                      <input
+                        required
+                        type="text"
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-4 py-2.5 text-sm focus:border-primary focus:outline-none text-on-surface font-medium"
+                        value={editPagoMovil.telefono}
+                        onChange={(e) => setEditPagoMovil({ ...editPagoMovil, telefono: e.target.value })}
+                      />
+                    </div>
+                    
+                    <div className="pt-2">
+                      <button
+                        type="submit"
+                        disabled={savingConfig}
+                        className="w-full py-3 bg-primary text-on-primary rounded-lg text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50 transition-all cursor-pointer active:scale-95 shadow-md hover:brightness-110"
+                      >
+                        {savingConfig ? (
+                          <><span className="material-symbols-outlined animate-spin text-sm">sync</span> Guardando...</>
+                        ) : (
+                          'Guardar Cambios'
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </section>
+          )}
          </div>
 
         {/* Footer */}
