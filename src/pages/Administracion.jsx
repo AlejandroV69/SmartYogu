@@ -18,6 +18,19 @@ export default function Administracion() {
   const [newVariant, setNewVariant] = useState({ presentacion: '', precio: '', stock: '' });
   const [savingFlavor, setSavingFlavor] = useState(false);
 
+  // ── Lotes de Producción ────────────────────────────────────────
+  const [lotes, setLotes] = useState([]);
+  const [loadingLotes, setLoadingLotes] = useState(false);
+  const [loteItems, setLoteItems] = useState([]);   // { lote_id, producto_id, cantidad }
+  const [expandedLoteId, setExpandedLoteId] = useState(null);
+  const [loteModalOpen, setLoteModalOpen] = useState(false);
+  const [savingLote, setSavingLote] = useState(false);
+  const [newLote, setNewLote] = useState({
+    fecha_produccion: new Date().toISOString().split('T')[0],
+    notas: '',
+    items: [{ producto_id: '', cantidad: '' }],
+  });
+
   // ── Tema Claro / Oscuro ──────────────────────────────────────────
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('smartyogu_theme') || 'dark';
@@ -187,6 +200,26 @@ export default function Administracion() {
     fetchSedes();
     fetchInventarioSedes();
   }, []);
+
+  // ── GET: lotes + lote_items ──────────────────────────────────
+  const fetchLotes = async () => {
+    setLoadingLotes(true);
+    const { data: lotesData } = await supabase
+      .from('lotes')
+      .select('*')
+      .order('fecha_produccion', { ascending: false });
+    if (lotesData) setLotes(lotesData);
+
+    const { data: itemsData } = await supabase
+      .from('lote_items')
+      .select('*, inventario(sabor, presentacion)');
+    if (itemsData) setLoteItems(itemsData);
+    setLoadingLotes(false);
+  };
+
+  useEffect(() => {
+    fetchLotes();
+  }, [activeTab === 'Lotes']);
 
   // ── UPDATE: stock de inventario (+/-) ────────────────────────────
   const updateStock = async (producto, delta) => {
@@ -499,6 +532,66 @@ export default function Administracion() {
     });
   };
 
+  // ── POST: guardar lote de producción ────────────────────────────
+  const handleSaveLote = async (e) => {
+    e.preventDefault();
+    const itemsValidos = newLote.items.filter(i => i.producto_id && parseInt(i.cantidad) > 0);
+    if (itemsValidos.length === 0) {
+      setError('Agrega al menos un producto con cantidad mayor a 0.');
+      return;
+    }
+    setSavingLote(true);
+
+    // Generar número de lote: L-YYYY-NNN
+    const year = new Date().getFullYear();
+    const nroActual = lotes.filter(l => l.numero_lote.startsWith(`L-${year}`)).length + 1;
+    const numeroLote = `L-${year}-${String(nroActual).padStart(3, '0')}`;
+
+    // 1. Insertar el lote
+    const { data: loteData, error: loteError } = await supabase
+      .from('lotes')
+      .insert([{ numero_lote: numeroLote, fecha_produccion: newLote.fecha_produccion, notas: newLote.notas || null }])
+      .select();
+
+    if (loteError || !loteData) {
+      setError(`Error creando lote: ${loteError?.message}`);
+      setSavingLote(false);
+      return;
+    }
+    const loteId = loteData[0].id;
+
+    // 2. Insertar los ítems del lote
+    const { error: itemsError } = await supabase
+      .from('lote_items')
+      .insert(itemsValidos.map(i => ({ lote_id: loteId, producto_id: parseInt(i.producto_id), cantidad: parseInt(i.cantidad) })));
+
+    if (itemsError) {
+      setError(`Error guardando ítems del lote: ${itemsError.message}`);
+      setSavingLote(false);
+      return;
+    }
+
+    // 3. Sumar al stock de inventario (campo stock en inventario)
+    for (const item of itemsValidos) {
+      const prod = inventario.find(p => p.id === parseInt(item.producto_id));
+      if (!prod) continue;
+      const nuevoStock = (prod.stock || 0) + parseInt(item.cantidad);
+      await supabase.from('inventario').update({ stock: nuevoStock }).eq('id', prod.id);
+    }
+
+    // 4. Refrescar estado local
+    setInventario(prev => prev.map(p => {
+      const it = itemsValidos.find(i => parseInt(i.producto_id) === p.id);
+      return it ? { ...p, stock: (p.stock || 0) + parseInt(it.cantidad) } : p;
+    }));
+    setLotes(prev => [loteData[0], ...prev]);
+    await fetchLotes();
+
+    setLoteModalOpen(false);
+    setNewLote({ fecha_produccion: new Date().toISOString().split('T')[0], notas: '', items: [{ producto_id: '', cantidad: '' }] });
+    setSavingLote(false);
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate('/login');
@@ -531,6 +624,7 @@ export default function Administracion() {
             { icon: 'dashboard', label: 'Inicio', id: 'Dashboard' },
             { icon: 'inventory_2', label: 'Inventario', id: 'Inventory' },
             { icon: 'store', label: 'Sedes', id: 'Sedes' },
+            { icon: 'science', label: 'Lotes', id: 'Lotes' },
             { icon: 'payments', label: 'Datos de Pago', id: 'PagoMovil' },
           ].map((item) => {
             const isActive = activeTab === item.id;
@@ -1565,6 +1659,113 @@ export default function Administracion() {
               </div>
             </section>
           )}
+
+          {/* ── Sección: Lotes de Producción ───────────────────────── */}
+          {activeTab === 'Lotes' && (
+            <section className="space-y-6">
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h3 className="font-bold text-xl text-on-surface">Lotes de Producción</h3>
+                  <p className="text-sm text-on-surface-variant">Historial de producciones registradas</p>
+                </div>
+                <button
+                  className="bg-primary text-on-primary px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 hover:brightness-110 active:scale-95 transition-all shadow-md"
+                  onClick={() => setLoteModalOpen(true)}
+                >
+                  <span className="material-symbols-outlined text-[18px]">add</span>
+                  Registrar Lote
+                </button>
+              </div>
+
+              {/* Lista de lotes */}
+              {loadingLotes ? (
+                <div className="space-y-3">
+                  {[1,2,3].map(n => <div key={n} className="h-20 bg-surface-container rounded-xl animate-pulse border border-outline-variant" />)}
+                </div>
+              ) : lotes.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <span className="material-symbols-outlined text-5xl text-on-surface-variant mb-3">science</span>
+                  <p className="text-on-surface font-semibold">Sin lotes registrados</p>
+                  <p className="text-sm text-on-surface-variant mt-1">Registra tu primer lote de producción</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {lotes.map(lote => {
+                    const items = loteItems.filter(i => i.lote_id === lote.id);
+                    const totalUnidades = items.reduce((s, i) => s + i.cantidad, 0);
+                    const saboresUnicos = [...new Set(items.map(i => i.inventario?.sabor).filter(Boolean))];
+                    const isExpanded = expandedLoteId === lote.id;
+                    return (
+                      <div key={lote.id} className="bg-surface-container border border-outline-variant rounded-2xl overflow-hidden transition-all">
+                        {/* Fila principal */}
+                        <button
+                          type="button"
+                          className="w-full flex items-center justify-between gap-4 p-5 hover:bg-surface-container-high transition-colors text-left"
+                          onClick={() => setExpandedLoteId(isExpanded ? null : lote.id)}
+                        >
+                          <div className="flex items-center gap-4 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center shrink-0">
+                              <span className="material-symbols-outlined text-primary text-[20px]">science</span>
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-bold text-on-surface text-sm">{lote.numero_lote}</span>
+                                <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-bold">
+                                  {totalUnidades} uds.
+                                </span>
+                              </div>
+                              <p className="text-xs text-on-surface-variant mt-0.5 truncate">
+                                {new Date(lote.fecha_produccion + 'T00:00:00').toLocaleDateString('es-VE', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
+                                {saboresUnicos.length > 0 && <span className="ml-2 text-on-surface-variant/70">· {saboresUnicos.join(', ')}</span>}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`material-symbols-outlined text-on-surface-variant text-[20px] shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`}>expand_more</span>
+                        </button>
+
+                        {/* Detalle del lote (expandible) */}
+                        {isExpanded && (
+                          <div className="border-t border-outline-variant px-5 pb-5 pt-4 space-y-3">
+                            {lote.notas && (
+                              <p className="text-xs text-on-surface-variant italic bg-surface-container-high rounded-lg px-3 py-2">{lote.notas}</p>
+                            )}
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="text-[10px] uppercase font-bold text-on-surface-variant border-b border-outline-variant">
+                                    <th className="text-left pb-2">Sabor</th>
+                                    <th className="text-left pb-2">Presentación</th>
+                                    <th className="text-right pb-2">Cantidad</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-outline-variant/40">
+                                  {items.map(item => (
+                                    <tr key={item.id} className="hover:bg-surface-container-high/50">
+                                      <td className="py-2 font-medium text-on-surface">{item.inventario?.sabor ?? '—'}</td>
+                                      <td className="py-2 text-on-surface-variant">{item.inventario?.presentacion ?? '—'}</td>
+                                      <td className="py-2 text-right font-bold text-primary tabular-nums">{item.cantidad}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                                <tfoot>
+                                  <tr className="border-t border-outline-variant">
+                                    <td colSpan={2} className="pt-2 text-xs font-bold text-on-surface-variant uppercase tracking-wide">Total del Lote</td>
+                                    <td className="pt-2 text-right font-black text-on-surface tabular-nums">{totalUnidades}</td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
+
          </div>
 
         {/* Footer */}
@@ -1976,6 +2177,156 @@ export default function Administracion() {
                     <><span className="material-symbols-outlined animate-spin">sync</span> Guardando...</>
                   ) : (
                     'Guardar Cambios'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Registrar Lote de Producción */}
+      {loteModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md p-4"
+          onClick={() => setLoteModalOpen(false)}
+        >
+          <div
+            className="bg-surface-container border border-outline-variant rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header Modal */}
+            <div className="p-6 border-b border-outline-variant flex justify-between items-center sticky top-0 bg-surface-container z-10">
+              <div>
+                <h3 className="font-bold text-xl text-on-surface">Registrar Lote</h3>
+                <p className="text-xs text-on-surface-variant mt-0.5">Producción del día</p>
+              </div>
+              <button className="text-on-surface-variant hover:text-primary transition-colors" onClick={() => setLoteModalOpen(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveLote} className="p-6 space-y-6">
+              {/* Fecha */}
+              <div>
+                <label className="text-sm font-semibold text-on-surface-variant block mb-1.5">
+                  <span className="material-symbols-outlined text-[14px] align-middle mr-1">calendar_today</span>
+                  Fecha de Producción
+                </label>
+                <input
+                  required
+                  type="date"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 focus:border-primary focus:outline-none text-on-surface text-sm"
+                  value={newLote.fecha_produccion}
+                  onChange={e => setNewLote({ ...newLote, fecha_produccion: e.target.value })}
+                />
+              </div>
+
+              {/* Notas */}
+              <div>
+                <label className="text-sm font-semibold text-on-surface-variant block mb-1.5">
+                  <span className="material-symbols-outlined text-[14px] align-middle mr-1">notes</span>
+                  Notas (opcional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Observaciones del lote..."
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-xl px-4 py-3 focus:border-primary focus:outline-none text-on-surface text-sm resize-none"
+                  value={newLote.notas}
+                  onChange={e => setNewLote({ ...newLote, notas: e.target.value })}
+                />
+              </div>
+
+              {/* Ítems del Lote */}
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <label className="text-sm font-semibold text-on-surface-variant">
+                    <span className="material-symbols-outlined text-[14px] align-middle mr-1">inventory_2</span>
+                    Productos Producidos
+                  </label>
+                  <button
+                    type="button"
+                    className="text-xs text-primary font-semibold hover:underline flex items-center gap-1"
+                    onClick={() => setNewLote(prev => ({ ...prev, items: [...prev.items, { producto_id: '', cantidad: '' }] }))}
+                  >
+                    <span className="material-symbols-outlined text-[14px]">add</span>
+                    Añadir producto
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {newLote.items.map((item, idx) => (
+                    <div key={idx} className="flex gap-2 items-start">
+                      <select
+                        required
+                        className="flex-1 bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2.5 focus:border-primary focus:outline-none text-on-surface text-sm"
+                        value={item.producto_id}
+                        onChange={e => {
+                          const updated = [...newLote.items];
+                          updated[idx] = { ...updated[idx], producto_id: e.target.value };
+                          setNewLote({ ...newLote, items: updated });
+                        }}
+                      >
+                        <option value="">Sabor + Presentación...</option>
+                        {inventario.map(p => (
+                          <option key={p.id} value={p.id}>{p.sabor} — {p.presentacion}</option>
+                        ))}
+                      </select>
+                      <input
+                        required
+                        type="number"
+                        min="1"
+                        placeholder="Uds."
+                        className="w-24 bg-surface-container-low border border-outline-variant rounded-xl px-3 py-2.5 focus:border-primary focus:outline-none text-on-surface text-sm text-center"
+                        value={item.cantidad}
+                        onChange={e => {
+                          const updated = [...newLote.items];
+                          updated[idx] = { ...updated[idx], cantidad: e.target.value };
+                          setNewLote({ ...newLote, items: updated });
+                        }}
+                      />
+                      {newLote.items.length > 1 && (
+                        <button
+                          type="button"
+                          className="text-on-surface-variant hover:text-error p-2 rounded-lg hover:bg-error/10 transition-colors mt-0.5"
+                          onClick={() => setNewLote(prev => ({ ...prev, items: prev.items.filter((_, i) => i !== idx) }))}
+                        >
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Resumen de total */}
+                {newLote.items.some(i => parseInt(i.cantidad) > 0) && (
+                  <div className="mt-3 p-3 bg-primary/8 border border-primary/20 rounded-xl flex justify-between items-center">
+                    <span className="text-xs font-semibold text-on-surface-variant">Total a producir</span>
+                    <span className="text-lg font-black text-primary tabular-nums">
+                      {newLote.items.reduce((s, i) => s + (parseInt(i.cantidad) || 0), 0)} uds.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Acciones */}
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  className="flex-1 py-3 text-sm font-medium text-on-surface-variant border border-outline-variant rounded-xl hover:bg-surface-container-highest transition-all"
+                  onClick={() => setLoteModalOpen(false)}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingLote}
+                  className="flex-1 py-3 bg-primary text-on-primary rounded-xl text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50 transition-all hover:brightness-110 active:scale-95"
+                >
+                  {savingLote ? (
+                    <><span className="material-symbols-outlined animate-spin text-sm">sync</span> Guardando...</>
+                  ) : (
+                    <><span className="material-symbols-outlined text-sm">check</span> Confirmar Lote</>
                   )}
                 </button>
               </div>
