@@ -364,14 +364,18 @@ export default function Administracion() {
     const currentStock = existing?.stock ?? 0;
     const nuevoStock = Math.max(0, currentStock + delta);
 
+    // Lote más reciente disponible (para trazabilidad)
+    const loteReciente = lotes.length > 0 ? lotes[0] : null;
+    const loteId = loteReciente?.id ?? null;
+
     if (existing) {
       // Actualización optimista
       setInventarioSedes(prev => prev.map(i =>
-        i.id === existing.id ? { ...i, stock: nuevoStock } : i
+        i.id === existing.id ? { ...i, stock: nuevoStock, lote_id: loteId } : i
       ));
       const { error } = await supabase
         .from('inventario_sedes')
-        .update({ stock: nuevoStock })
+        .update({ stock: nuevoStock, lote_id: loteId })
         .eq('id', existing.id);
       if (error) {
         setInventarioSedes(prev => prev.map(i => i.id === existing.id ? { ...i, stock: currentStock } : i));
@@ -381,7 +385,7 @@ export default function Administracion() {
       // Crear nueva fila (primera vez que se añade stock a esta sede)
       const { data, error } = await supabase
         .from('inventario_sedes')
-        .insert([{ sede_id: sedeId, producto_id: productoId, stock: nuevoStock }])
+        .insert([{ sede_id: sedeId, producto_id: productoId, stock: nuevoStock, lote_id: loteId }])
         .select('*, inventario(sabor, presentacion, precio)');
       if (error) {
         setError(`Error al crear stock en sede: ${error.message}`);
@@ -513,6 +517,13 @@ export default function Administracion() {
     inventarioSedes
       .filter(i => i.producto_id === productoId)
       .map(i => ({ nombre: getSedeName(i.sede_id), stock: i.stock }));
+
+  // Retorna info del lote vinculado a un item de inventario_sedes
+  const getLoteDeSedeItem = (sedeId, productoId) => {
+    const item = inventarioSedes.find(i => i.sede_id === sedeId && i.producto_id === productoId);
+    if (!item?.lote_id) return null;
+    return lotes.find(l => l.id === item.lote_id) || null;
+  };
 
   // ── Helpers UI ───────────────────────────────────────────────────
   const getStockColor = (stock) => {
@@ -1290,11 +1301,24 @@ export default function Administracion() {
                                     )?.stock ?? 0;
                                     return (
                                       <div key={item.id} className="bg-surface-container-low border border-outline-variant rounded-lg p-3">
-                                        <div className="flex justify-between items-center mb-2">
+                                        <div className="flex justify-between items-start mb-2 gap-2">
                                           <div>
                                             <span className="text-sm font-bold text-on-surface">{item.presentacion}</span>
                                             <span className="text-xs text-on-surface-variant ml-2">${Number(item.precio).toFixed(2)}</span>
                                           </div>
+                                          {/* Chip: Lote de origen */}
+                                          {(() => {
+                                            const loteItem = getLoteDeSedeItem(selectedSedeTab, item.id);
+                                            return loteItem ? (
+                                              <span className="text-[9px] bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 rounded-full font-bold flex items-center gap-0.5 shrink-0 whitespace-nowrap">
+                                                <span className="material-symbols-outlined text-[9px]">science</span>
+                                                {loteItem.numero_lote}
+                                                <span className="text-primary/60 ml-0.5">
+                                                  · {new Date(loteItem.fecha_produccion + 'T00:00:00').toLocaleDateString('es-VE', { day: 'numeric', month: 'short' })}
+                                                </span>
+                                              </span>
+                                            ) : null;
+                                          })()}
                                         </div>
                                         <div className="flex items-center gap-4 mb-3">
                                           <div className="flex-1">
