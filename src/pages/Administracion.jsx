@@ -31,6 +31,10 @@ export default function Administracion() {
     items: [{ producto_id: '', cantidad: '' }],
   });
 
+  // ── Estadísticas ─────────────────────────────────────────────
+  const now = new Date();
+  const [statsMonth, setStatsMonth] = useState({ year: now.getFullYear(), month: now.getMonth() });
+
   // ── Tema Claro / Oscuro ──────────────────────────────────────────
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('smartyogu_theme') || 'dark';
@@ -636,6 +640,7 @@ export default function Administracion() {
             { icon: 'inventory_2', label: 'Inventario', id: 'Inventory' },
             { icon: 'store', label: 'Sedes', id: 'Sedes' },
             { icon: 'science', label: 'Lotes', id: 'Lotes' },
+            { icon: 'bar_chart', label: 'Estadísticas', id: 'Stats' },
             { icon: 'payments', label: 'Datos de Pago', id: 'PagoMovil' },
           ].map((item) => {
             const isActive = activeTab === item.id;
@@ -1789,6 +1794,292 @@ export default function Administracion() {
               )}
             </section>
           )}
+
+          {/* ── Sección: Estadísticas ─────────────────────────────── */}
+          {activeTab === 'Stats' && (() => {
+            // ─ Calcular rango del mes seleccionado ────────────────────────
+            const { year, month } = statsMonth;
+            const mesInicio = new Date(year, month, 1);
+            const mesFin = new Date(year, month + 1, 0);
+
+            // Lotes del mes
+            const lotesMes = lotes.filter(l => {
+              const d = new Date(l.fecha_produccion + 'T00:00:00');
+              return d >= mesInicio && d <= mesFin;
+            });
+
+            // Items de esos lotes
+            const itemsMes = loteItems.filter(i => lotesMes.some(l => l.id === i.lote_id));
+
+            // KPI: total unidades
+            const totalUds = itemsMes.reduce((s, i) => s + i.cantidad, 0);
+
+            // KPI: sabor estrella
+            const porSabor = itemsMes.reduce((acc, i) => {
+              const s = i.inventario?.sabor || 'Sin nombre';
+              acc[s] = (acc[s] || 0) + i.cantidad;
+              return acc;
+            }, {});
+            const saborEstrella = Object.entries(porSabor).sort((a, b) => b[1] - a[1])[0];
+            const maxSaborVal = saborEstrella?.[1] || 1;
+
+            // KPI: presentación líder
+            const porPresentacion = itemsMes.reduce((acc, i) => {
+              const p = i.inventario?.presentacion || 'Sin nombre';
+              acc[p] = (acc[p] || 0) + i.cantidad;
+              return acc;
+            }, {});
+            const presLider = Object.entries(porPresentacion).sort((a, b) => b[1] - a[1])[0];
+            const totalPres = Object.values(porPresentacion).reduce((s, v) => s + v, 0) || 1;
+
+            // KPI: Stock total en todas las sedes
+            const stockTotal = inventarioSedes.reduce((s, i) => s + i.stock, 0);
+
+            // Nombre del mes
+            const nombreMes = mesInicio.toLocaleDateString('es-VE', { month: 'long', year: 'numeric' });
+
+            // Sedes ordenadas por stock
+            const sedesConStock = sedes.map(s => ({
+              ...s,
+              stock: inventarioSedes.filter(i => i.sede_id === s.id).reduce((sum, i) => sum + i.stock, 0),
+            })).sort((a, b) => b.stock - a.stock);
+            const maxStockSede = sedesConStock[0]?.stock || 1;
+
+            const prevMonth = () => setStatsMonth(prev => {
+              const d = new Date(prev.year, prev.month - 1, 1);
+              return { year: d.getFullYear(), month: d.getMonth() };
+            });
+            const nextMonth = () => setStatsMonth(prev => {
+              const d = new Date(prev.year, prev.month + 1, 1);
+              if (d > new Date()) return prev;
+              return { year: d.getFullYear(), month: d.getMonth() };
+            });
+            const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+
+            return (
+              <section className="space-y-6">
+                {/* Header con selector de mes */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                  <div>
+                    <h3 className="font-bold text-xl text-on-surface">Estadísticas de Producción</h3>
+                    <p className="text-sm text-on-surface-variant">Resumen mensual estratégico</p>
+                  </div>
+                  {/* Selector de mes */}
+                  <div className="flex items-center gap-2 bg-surface-container border border-outline-variant rounded-xl p-1">
+                    <button
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface transition-all"
+                      onClick={prevMonth}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">chevron_left</span>
+                    </button>
+                    <span className="text-sm font-semibold text-on-surface px-2 capitalize min-w-[160px] text-center">{nombreMes}</span>
+                    <button
+                      className="w-8 h-8 flex items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface transition-all disabled:opacity-30"
+                      onClick={nextMonth}
+                      disabled={isCurrentMonth}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* KPI Cards */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                  {[
+                    { icon: 'science', label: 'Lotes del Mes', value: lotesMes.length, unit: 'lotes', color: 'text-primary', bg: 'bg-primary/10', border: 'border-primary/20' },
+                    { icon: 'inventory_2', label: 'Uds. Producidas', value: totalUds, unit: 'unidades', color: 'text-tertiary', bg: 'bg-tertiary/10', border: 'border-tertiary/20' },
+                    { icon: 'star', label: 'Sabor Estrella', value: saborEstrella?.[0] ?? '—', unit: saborEstrella ? `${saborEstrella[1]} uds.` : '', color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/20' },
+                    { icon: 'straighten', label: 'Tamaño Líder', value: presLider?.[0] ?? '—', unit: presLider ? `${Math.round((presLider[1] / totalPres) * 100)}%` : '', color: 'text-sky-400', bg: 'bg-sky-400/10', border: 'border-sky-400/20' },
+                    { icon: 'inventory', label: 'Stock Total', value: stockTotal, unit: 'en sistema', color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/20' },
+                    { icon: 'store', label: 'Sedes Activas', value: sedes.filter(s => s.activa).length, unit: `de ${sedes.length}`, color: 'text-orange-400', bg: 'bg-orange-400/10', border: 'border-orange-400/20' },
+                  ].map((kpi, idx) => (
+                    <div key={idx} className={`bg-surface-container border ${kpi.border} rounded-2xl p-4 flex flex-col gap-2`}>
+                      <div className={`w-8 h-8 rounded-lg ${kpi.bg} flex items-center justify-center shrink-0`}>
+                        <span className={`material-symbols-outlined text-[16px] ${kpi.color}`}>{kpi.icon}</span>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-on-surface-variant uppercase font-bold tracking-wide leading-none mb-1">{kpi.label}</p>
+                        <p className={`text-xl font-black leading-none tabular-nums ${kpi.color}`}>{kpi.value}</p>
+                        {kpi.unit && <p className="text-[10px] text-on-surface-variant mt-0.5">{kpi.unit}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Gráficas: Sabor + Presentación */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Producción por Sabor */}
+                  <div className="bg-surface-container border border-outline-variant rounded-2xl p-5">
+                    <h4 className="font-bold text-sm text-on-surface mb-4 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-primary text-[18px]">bar_chart</span>
+                      Producción por Sabor
+                    </h4>
+                    {Object.keys(porSabor).length === 0 ? (
+                      <div className="flex items-center justify-center h-24 text-center">
+                        <p className="text-sm text-on-surface-variant">Sin datos para este mes</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {Object.entries(porSabor).sort((a, b) => b[1] - a[1]).map(([sabor, qty]) => (
+                          <div key={sabor}>
+                            <div className="flex justify-between items-center mb-1">
+                              <span className="text-xs font-semibold text-on-surface">{sabor}</span>
+                              <span className="text-xs font-black text-primary tabular-nums">{qty} uds.</span>
+                            </div>
+                            <div className="h-2 bg-surface-container-highest rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary rounded-full transition-all duration-700"
+                                style={{ width: `${Math.round((qty / maxSaborVal) * 100)}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Producción por Presentación */}
+                  <div className="bg-surface-container border border-outline-variant rounded-2xl p-5">
+                    <h4 className="font-bold text-sm text-on-surface mb-4 flex items-center gap-2">
+                      <span className="material-symbols-outlined text-tertiary text-[18px]">donut_large</span>
+                      Distribución por Tamaño
+                    </h4>
+                    {Object.keys(porPresentacion).length === 0 ? (
+                      <div className="flex items-center justify-center h-24 text-center">
+                        <p className="text-sm text-on-surface-variant">Sin datos para este mes</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {Object.entries(porPresentacion).sort((a, b) => b[1] - a[1]).map(([pres, qty], idx) => {
+                          const pct = Math.round((qty / totalPres) * 100);
+                          const colors = ['bg-primary', 'bg-tertiary', 'bg-sky-400', 'bg-orange-400', 'bg-green-400'];
+                          const textColors = ['text-primary', 'text-tertiary', 'text-sky-400', 'text-orange-400', 'text-green-400'];
+                          return (
+                            <div key={pres}>
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs font-semibold text-on-surface">{pres}</span>
+                                <span className={`text-xs font-black tabular-nums ${textColors[idx % textColors.length]}`}>{pct}% · {qty} uds.</span>
+                              </div>
+                              <div className="h-2 bg-surface-container-highest rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full ${colors[idx % colors.length]} rounded-full transition-all duration-700`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Timeline de Lotes del Mes */}
+                <div className="bg-surface-container border border-outline-variant rounded-2xl p-5">
+                  <h4 className="font-bold text-sm text-on-surface mb-4 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-on-surface-variant text-[18px]">timeline</span>
+                    Timeline de Lotes — <span className="capitalize font-normal text-on-surface-variant">{nombreMes}</span>
+                  </h4>
+                  {lotesMes.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 text-center">
+                      <span className="material-symbols-outlined text-4xl text-on-surface-variant mb-2">science</span>
+                      <p className="text-sm text-on-surface-variant">No se registraron lotes en {nombreMes}</p>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      {/* Línea vertical */}
+                      <div className="absolute left-[19px] top-0 bottom-0 w-px bg-outline-variant" />
+                      <div className="space-y-4">
+                        {[...lotesMes].sort((a, b) => new Date(a.fecha_produccion) - new Date(b.fecha_produccion)).map(lote => {
+                          const items = loteItems.filter(i => i.lote_id === lote.id);
+                          const total = items.reduce((s, i) => s + i.cantidad, 0);
+                          const sabores = [...new Set(items.map(i => i.inventario?.sabor).filter(Boolean))];
+                          return (
+                            <div key={lote.id} className="flex gap-4 items-start relative">
+                              {/* Punto del timeline */}
+                              <div className="w-10 h-10 rounded-full bg-surface-container-highest border-2 border-primary flex items-center justify-center shrink-0 z-10">
+                                <span className="material-symbols-outlined text-primary text-[16px]">science</span>
+                              </div>
+                              <div className="flex-1 bg-surface-container-low border border-outline-variant rounded-xl p-3 pb-3">
+                                <div className="flex justify-between items-start gap-2 flex-wrap">
+                                  <div>
+                                    <span className="font-bold text-sm text-on-surface">{lote.numero_lote}</span>
+                                    <span className="text-xs text-on-surface-variant ml-2 capitalize">
+                                      {new Date(lote.fecha_produccion + 'T00:00:00').toLocaleDateString('es-VE', { weekday: 'short', day: 'numeric', month: 'short' })}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-bold">
+                                    {total} uds.
+                                  </span>
+                                </div>
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {sabores.map(s => (
+                                    <span key={s} className="text-[9px] bg-surface-container-highest text-on-surface-variant px-1.5 py-0.5 rounded font-medium">{s}</span>
+                                  ))}
+                                </div>
+                                {lote.notas && (
+                                  <p className="text-[10px] text-on-surface-variant mt-1.5 italic">{lote.notas}</p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Stock por Sede */}
+                <div className="bg-surface-container border border-outline-variant rounded-2xl p-5">
+                  <h4 className="font-bold text-sm text-on-surface mb-4 flex items-center gap-2">
+                    <span className="material-symbols-outlined text-on-surface-variant text-[18px]">store</span>
+                    Stock Actual por Sede
+                  </h4>
+                  {sedesConStock.length === 0 ? (
+                    <p className="text-sm text-on-surface-variant">Sin sedes registradas.</p>
+                  ) : (
+                    <div className="space-y-4">
+                      {sedesConStock.map(sede => (
+                        <div key={sede.id}>
+                          <div className="flex justify-between items-center mb-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-[14px] text-on-surface-variant">store</span>
+                              <span className="text-sm font-semibold text-on-surface">{sede.nombre}</span>
+                              {!sede.activa && (
+                                <span className="text-[9px] bg-error/20 text-error px-1.5 py-0.5 rounded font-bold">Inactiva</span>
+                              )}
+                            </div>
+                            <span className={`text-sm font-black tabular-nums ${
+                              sede.stock <= 20 ? 'text-error' : sede.stock <= 60 ? 'text-tertiary' : 'text-primary'
+                            }`}>{sede.stock} uds.</span>
+                          </div>
+                          <div className="h-2.5 bg-surface-container-highest rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-700 ${
+                                sede.stock <= 20 ? 'bg-error' : sede.stock <= 60 ? 'bg-tertiary' : 'bg-primary'
+                              }`}
+                              style={{ width: `${Math.min(Math.round((sede.stock / maxStockSede) * 100), 100)}%` }}
+                            />
+                          </div>
+                          <div className="flex justify-between mt-1">
+                            <span className="text-[9px] text-on-surface-variant">
+                              {inventarioSedes.filter(i => i.sede_id === sede.id && i.stock > 0).length} productos con stock
+                            </span>
+                            <span className={`text-[9px] font-bold ${
+                              sede.stock <= 20 ? 'text-error' : sede.stock <= 60 ? 'text-tertiary' : 'text-primary'
+                            }`}>
+                              {sede.stock <= 20 ? '⚠ CRÍTICO' : sede.stock <= 60 ? '! MEDIO' : '✓ OK'}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </section>
+            );
+          })()}
 
          </div>
 
