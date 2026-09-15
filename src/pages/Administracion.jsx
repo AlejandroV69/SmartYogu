@@ -907,16 +907,74 @@ export default function Administracion() {
             </section>
           )}
 
-          {/* Hero */}
-          <section className="relative h-28 rounded-xl overflow-hidden bg-surface-container-low border border-outline-variant flex items-center px-6">
-            <div className="absolute inset-0 bg-gradient-to-r from-surface-container-low via-transparent to-transparent"></div>
-            <div className="relative z-10">
-              <p className="text-primary font-bold text-xs uppercase tracking-tighter mb-0.5">Gestión Administrativa</p>
-              <h1 className="font-extrabold text-2xl md:text-3xl text-on-surface leading-none">
-                {activeTab === 'Dashboard' ? 'Panel General' : activeTab === 'Inventory' ? 'Inventario de Sabores' : activeTab === 'Verification' ? 'Cola de Verificación' : activeTab === 'History' ? 'Historial de Pedidos' : activeTab === 'Sedes' ? 'Inventario por Sedes' : 'Configuración'}
-              </h1>
-            </div>
-          </section>
+          {/* Hero Banner Dinámico por Módulo */}
+          {(() => {
+            const heroInfo = {
+              Dashboard: {
+                tag: 'Gestión Administrativa',
+                title: 'Panel General',
+                desc: 'Vista panorámica del inventario, sedes activas y métricas rápidas del sistema',
+                icon: 'dashboard',
+              },
+              Inventory: {
+                tag: 'Catálogo & Sabores',
+                title: 'Inventario de Sabores',
+                desc: 'Gestión de catálogo, disponibilidad de sabores, presentaciones y precios',
+                icon: 'inventory_2',
+              },
+              Sedes: {
+                tag: 'Puntos de Venta',
+                title: 'Inventario por Sedes',
+                desc: 'Control independiente de existencia física y asignación de stock por sede',
+                icon: 'store',
+              },
+              Lotes: {
+                tag: 'Producción & Lotes',
+                title: 'Lotes de Producción',
+                desc: 'Registro de lotes elaborados con fechas, notas y detalle por producto',
+                icon: 'science',
+              },
+              Stats: {
+                tag: 'Inteligencia & Métricas',
+                title: 'Estadísticas Mensuales',
+                desc: 'Indicadores clave de rendimiento, producción mensual y stock por sedes',
+                icon: 'bar_chart',
+              },
+              PagoMovil: {
+                tag: 'Ajustes & Finanzas',
+                title: 'Datos de Pago Móvil',
+                desc: 'Configuración de cuentas bancarias de la marca y calculadora de tasa BCV',
+                icon: 'payments',
+              },
+            };
+            const currentHero = heroInfo[activeTab] || {
+              tag: 'Gestión Administrativa',
+              title: 'Panel de Control',
+              desc: 'Administración general de THÖRGURT',
+              icon: 'settings',
+            };
+
+            return (
+              <section className="relative rounded-2xl overflow-hidden bg-surface-container-low border border-outline-variant flex items-center justify-between p-6 shadow-sm">
+                <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-transparent to-transparent pointer-events-none" />
+                <div className="relative z-10 space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                    <p className="text-primary font-bold text-xs uppercase tracking-wider">{currentHero.tag}</p>
+                  </div>
+                  <h1 className="font-extrabold text-2xl md:text-3xl text-on-surface tracking-tight">
+                    {currentHero.title}
+                  </h1>
+                  <p className="text-xs md:text-sm text-on-surface-variant font-medium">
+                    {currentHero.desc}
+                  </p>
+                </div>
+                <div className="hidden sm:flex w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 items-center justify-center text-primary shrink-0 z-10 shadow-xs">
+                  <span className="material-symbols-outlined text-2xl">{currentHero.icon}</span>
+                </div>
+              </section>
+            );
+          })()}
 
           {/* ── Sección 1: Inventario ─────────────────────────────── */}
           {(activeTab === 'Dashboard' || activeTab === 'Inventory') && (
